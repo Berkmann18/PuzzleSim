@@ -1,0 +1,2872 @@
+<html>
+<head>
+	<title>jCube</title>
+	<meta charset="UTF-8" />
+	<meta name="author" content="Maximilian Berkmann" />
+	<script type="text/javascript" src="file:///C:/Users/Administrator/Dropbox/Projects/Essencejs/essence.min.js"></script>
+	function RubikCube(x, y, z, w, h, d, nbCubieX, nbCubieY, nbCubieZ, cubieBorderSize, cubieBorderClr, cubieSpacing, colorScheme, pgrid, florian, logo){//colorScheme=[U, F, R, D, B, L]; 	
+		this.state = "UF UR UB UL FR BR BL FL DF DR DB DL UFR URB UBL ULF FRD RBD BLD LFD";
+		this.x = x || 0;
+		this.y = y || 0;
+		this.z = z || 0;
+		this.width = w || 33;
+		this.height = h || 33;
+		this.deepth = d || 33;
+		this.nbCubieX = nbCubieX || 3;
+		this.nbCubieY = nbCubieY || 3;
+		this.nbCubieZ = nbCubieZ || 3;
+		this.cubieBorderSize = cubieBorderSize || 1;
+		this.cubieBorderColor = cubieBorderClr || "#000";
+		this.cubieSpacing = cubieSpacing || 0;  //UFRBLD
+		this.florian = florian || "7px";
+		this.colorScheme = colorScheme || new Array("#FFF", "#0F0", "#F00", "#00F", "#FFB500", "#FF0");
+		this.grid = pgrid || [];
+		//methods: reset, scramble (WCA/Old Style/Cross Solved/LL/OLL/PLL/LSLL/ZBLL/CMLL/LSE/ELL/CLL/Corners Only/Edges Only/Orientation/Permutation/2G (RU/MU/LU/RD/LD)/3G (FRU/FLU/RLU/RrU/LlU)), solve (undo/LbL/Fridrich/Petrus/Roux/EF/CF), isSolved, rotX/Y/Z, turnU/F/R/D/B/L/E/S/M, zoomIn, zoomOut, speed, undo
+		this.cubieSize = [this.width/this.nbCubieX, this.height/this.nbCubieY, this.deepth/this.nbCubieZ];//in px
+		this.logo = logo || {
+			name: "B.Max",
+			face: "U",
+			source: "file:///C:/Users/Administrator/Dropbox/Photos/Cubing/maxcubing64.png",
+			visible: true
+		};
+		this.reset = function(d){
+			var g=[], n=0;
+			for(i=0; i<6; i++){
+				g[i] = new Array(this.nbCubieX);
+				for(j=0; j<this.nbCubieY; j++){
+					g[i][j] = [];
+					for(k=0; k<this.nbCubieZ; k++) g[i][j][k] = n++;
+				}
+			}
+			this.format = this.nbCubieX+"x"+this.nbCubieY+"x"+this.nbCubieZ;
+			if(this.format=="3x3x3"){
+				g[0] = [[0, 1, 2], //U
+						[3, 4, 5],
+						[6, 7, 8]];
+				g[1] = [[9, 10, 11], //F
+						[12, 13, 14],
+						[15, 16, 17]];
+				g[2] = [[18, 19, 20], //R
+						[21, 22, 23],
+						[24, 25, 26]];
+				g[3] = [[27, 28, 29], //B
+						[30, 31, 32],
+						[33, 34, 35]];
+				g[4] = [[36, 37, 38], //L
+						[39, 40, 41],
+						[42, 43, 44]];
+				g[5] = [[45, 46, 47], //D
+						[48, 49, 50],
+						[51, 52, 53]];
+			}else if(this.format=="2x2x2"){
+				g[0] = [[0, 1], //U
+						[2, 3]];
+				g[1] = [[4, 5], //F
+						[6, 7]];
+				g[2] = [[8, 9], //R
+						[10, 11]];
+				g[3] = [[12, 13], //B
+						[14, 15]];
+				g[4] = [[16, 17], //L
+						[18, 19]];
+				g[5] = [[20, 21], //D
+						[22, 23]];
+			}else if(this.format=="4x4x4"){
+				g[0] = [[0, 1, 2, 3], //U
+						[4, 5, 6, 7],
+						[8, 9, 10, 11],
+						[12, 13, 14, 15]];
+				g[1] = [[16, 18, 19, 20], //F
+						[21, 22, 23, 24],
+						[25, 26, 27, 28],
+						[29, 30, 31, 32]];
+				g[2] = [[33, 34, 35, 36], //R
+						[37, 38, 39, 40],
+						[41, 42, 43, 44],
+						[45, 46, 47, 48]];
+				g[2] = [[49, 50, 51, 52], //B
+						[53, 54, 55, 56],
+						[57, 58, 59, 60],
+						[61, 62, 63, 64]];
+			}else Essence.say("The format "+this.format+" isn't supported yet.", "warn");
+			this.grid = g;
+			//this.draw();
+			this.format = this.nbCubieX+"x"+this.nbCubieY+"x"+this.nbCubieZ;
+			this.moveHistory = [];
+		}
+		this.format = this.nbCubieX+"x"+this.nbCubieY+"x"+this.nbCubieZ;
+		this.reset(2);
+		this.moveHistory = [];
+		this.undo = function(){
+			this.move(undoMove(this.moveHistory).split(" ")[0]);
+			this.moveHistory.pop();this.moveHistory.pop();
+			cube.draw();
+		}
+		this.scramble = function(opt, d, getSc){
+			opt = rmChar(opt.toLowerCase(), "");
+			if(opt=="wca" || opt=="normal" || opt=="randomstate"){
+				if(this.nbCubieX>=2 && this.nbCubieY==this.nbCubieX && this.nbCubieZ==this.nbCubieX) this.perform(randState(this.nbCubieX, 1));
+			}else if(opt=="corners"){
+				if(this.format=="2x2x2"){
+				
+				}else{
+				
+				}
+			}else if(opt=="edges"){
+				if(this.format=="2x2x2"){
+					return false;
+				}else{
+				
+				}
+			}else if(opt=="centres"){
+				if(this.format=="2x2x2" || this.format=="3x3x3"){
+					return false;
+				}else{
+				
+				}
+			}else if(opt=="crosssolved"){
+				if(this.format=="2x2x2"){
+					return false;
+				}else{
+				
+				}
+			}else if(opt=="ll"){
+				
+			}else if(opt=="zbll" || opt=="zzll"){
+				
+			}else if(opt=="coll" || opt=="cll" || opt=="cmll" || opt=="ocllcp"){
+				
+			}else if(opt=="ell"){
+				if(this.format=="2x2x2"){
+					return false;
+				}else{
+				
+				}
+			}else if(opt=="k4ll"){
+				if(this.format=="2x2x2" || this.format=="3x3x3"){
+					return false;
+				}else{
+				
+				}
+			}else if(opt=="oll"){
+				
+			}else if(opt=="pll"){
+				
+			}else if(opt=="lsll" || opt=="f2ll"){
+				
+			}else if(opt=="lse" || opt=="l6e" || opt=="mu" || opt=="2gmu"){
+				if(this.format=="2x2x2"){
+						return false;
+				}else{
+					var moves = ['U','M'], prime = ['','\''], repeat = ['','2'], numberOfMoves = 13, lastMove = -1;
+					
+					for(var i=0; i<numberOfMoves; i++){
+						do{
+							var thisMove = randTo(moves.length-1);
+						}while(thisMove==lastMove);
+						lastMove = thisMove;
+						var thisPrime = randTo(prime.length-1);
+						var thisRepeat = (thisPrime==0)? randTo(repeat.length-1): 0;
+						this.move(moves[thisMove]+prime[thisPrime]+repeat[thisRepeat]);
+					}
+				}
+			}else if(opt=="firstblocksolved" || opt=="rru" || opt=="3grru"){
+				if(this.format=="2x2x2"){
+					return false;
+				}else{
+					var moves = ['R','U','r'], prime = ['','\''], repeat = ['','2'], numberOfMoves = 15, lastMove = -1;
+					
+					for(var i=0; i<numberOfMoves; i++){
+						do{
+							var thisMove = randTo(moves.length-1);
+						}while(thisMove==lastMove);
+						lastMove = thisMove;
+						var thisPrime = randTo(prime.length-1);
+						var thisRepeat = (thisPrime==0)? randTo(repeat.length-1): 0;
+						this.move(moves[thisMove]+prime[thisPrime]+repeat[thisRepeat]);
+					}
+				}
+			}else if(opt=="orientation"){
+				
+			}else if(opt=="permutation"){
+				var moves = ['R','L','U','D','F','B'], prime = ['','\''], repeat = ['','2'], numberOfMoves = 25, lastMove = -1;
+				
+				for(var i=0; i<numberOfMoves; i++){
+					do{
+						var thisMove = randTo(moves.length-1);
+					}while(thisMove==lastMove);
+					lastMove = thisMove;
+					var thisPrime = randTo(prime.length-1);
+					var thisRepeat = (thisPrime==0)? randTo(repeat.length-1): 0;
+					if(thisMove==2 || thisMove==3) this.move(moves[thisMove]+prime[thisPrime]+repeat[thisRepeat]);
+					else this.move(moves[thisMove]+"2");
+				}
+			}else if(opt=="ru" || opt=="2gru"){
+				var moves = ['R','U'], prime = ['','\''], repeat = ['','2'], numberOfMoves = 13, lastMove = -1;
+				
+				for(var i=0; i<numberOfMoves; i++){
+					do{
+						var thisMove = randTo(moves.length-1);
+					}while(thisMove==lastMove);
+					lastMove = thisMove;
+					var thisPrime = randTo(prime.length-1);
+					var thisRepeat = (thisPrime==0)? randTo(repeat.length-1): 0;
+					this.move(moves[thisMove]+prime[thisPrime]+repeat[thisRepeat]);
+				}
+			}else if(opt=="fru" || opt=="3gfru"){
+				var moves = ['R','U','F'], prime = ['','\''], repeat = ['','2'], numberOfMoves = 15, lastMove = -1;
+				
+				for(var i=0; i<numberOfMoves; i++){
+					do{
+						var thisMove = randTo(moves.length-1);
+					}while(thisMove==lastMove);
+					lastMove = thisMove;
+					var thisPrime = randTo(prime.length-1);
+					var thisRepeat = (thisPrime==0)? randTo(repeat.length-1): 0;
+					this.move(moves[thisMove]+prime[thisPrime]+repeat[thisRepeat]);
+				}
+			}else if(opt=="randommove" || opt=="oldstyle" || !opt){
+				var moves = (this.format=="2x2x2")? ['R', 'U', 'F']: ['R','L','U','D','F','B'], prime = ['','\''], repeat = ['','2'], numberOfMoves = (this.format=="2x2x2")? 11: 25, lastMove = -1;
+				if(this.nbCubieX>=4 && this.nbCubieY==this.nbCubieX && this.nbCubieZ==this.nbCubieX){
+					move.push("Rw", "Lw", "Dw", "Fw", "Bw");
+					numberOfMoves = 40+(this.nbCubieX-4)*20;
+				}
+				for(var i=0; i<numberOfMoves; i++){
+					do{
+						var thisMove = randTo(moves.length-1);
+					}while(thisMove==lastMove);
+					lastMove = thisMove;
+					var thisPrime = randTo(prime.length-1);
+					var thisRepeat = (thisPrime==0)? randTo(repeat.length-1): 0;
+					this.move(moves[thisMove]+prime[thisPrime]+repeat[thisRepeat]);
+				}
+			}
+			this.draw();
+			if(getSc) Essence.say("scramble: "+this.getState(), "info");
+		}
+		this.solve = function(method, threebythreestage){
+			method = rmChar(method.toLowerCase(), " ");
+			if(this.isSolved()) Essence.say("It's already solved !", "info");
+			else{
+			if(this.format=="2x2x2"){
+				if(method=="undo"){
+					while(!this.isSolved || this.moveHistory.length>0){
+						this.undo();
+						this.draw();
+					}
+				}else if(method=="lbl" || method=="fop" || method=="beginners"){
+					var c1=this.lookfor(0), c2=this.lookfor(1), c3=this.lookfor(2), c4=this.lookfor(3);
+				}else if(method=="cll" || method=="eg-0"){
+				
+				}else if(method=="ortega"){
+				
+				}else if(method=="eg-1"){
+				
+				}else if(method=="eg-2"){
+				
+				}else if(method=="eg" || method=="fulleg"){
+				
+				}else if(method=="guimond"){
+				
+				}else if(method=="tcll"){
+				
+				}else if(method=="ss"){
+				
+				}else if(method=="bv"){
+				
+				}else this.solve("undo");
+			}else if(this.format=="3x3x3"){
+				if(method=="undo"){
+					while(!this.isSolved || this.moveHistory.length>0){
+						this.undo();
+						this.draw();
+					}
+				}else if(method=="lbl" || method=="beginners"){
+					var uf = this.lookfor(7), ur = this.lookfor(5), ub = this.lookfor(1), ul = this.lookfor(3), alg = "";
+					switch(uf){
+						case [0, 0, 1]: alg += "U2";break;
+						case [0, 1, 0]: alg += "U'";break;
+						case [0, 1, 2]: alg += "U";break;
+						case [1, 0, 1]: alg += "F R U";break;
+						case [1, 1, 0]: alg += "L' U'";break;
+						case [1, 1, 2]: alg += "R U";break;
+						case [1, 2, 1]: alg += "F' R U";break;
+						case [2, 0, 1]: alg += "R' F'";break;
+						case [2, 1, 0]: alg += "F'";break;
+						case [2, 1, 2]: alg += "R2 F'";break;
+						case [2, 2, 1]: alg += "R F'";break;
+						case [3, 0, 1]: alg += "B' R' U";break;
+						case [3, 1, 0]: alg += "R' U";break;
+						case [3, 1, 2]: alg += "L U'";break;
+						case [3, 2, 1]: alg += "B R' U";break;
+						case [4, 0, 1]: alg += "L F";break;
+						case [4, 1, 0]: alg += "B' U2";break;
+						case [4, 1, 2]: alg += "F";break;
+						case [4, 2, 1]: alg += "L' F";break;
+						case [5, 0, 1]: alg += "F2";break;
+						case [5, 1, 0]: alg += "D F2";break;
+						case [5, 1, 2]: alg += "D' F2";break;
+						case [5, 2, 1]: alg += "D2 F2";break;
+						default:
+							alg = "";
+							Essence.say("UF solved");
+						break;
+					}
+					switch(ur){
+						case [0, 0, 1]: alg += "B' U' B U";break;
+						case [0, 1, 0]: alg += "F U2 F'";break;
+						case [1, 1, 0]: alg += "U2 L' U2";break;
+						case [1, 1, 2]: alg += "R";break;
+						case [1, 2, 1]: alg += "F' R F";break;
+						case [2, 0, 1]: alg += "R' U F' U'";break;
+						case [2, 1, 0]: alg += "U F' U'";break;
+						case [2, 1, 2]: alg += "U' B U";break;
+						case [2, 2, 1]: alg += "R U F' U'";break;
+						case [3, 0, 1]: alg += "B R'";break;
+						case [3, 1, 0]: alg += "R'";break;
+						case [3, 1, 2]: alg += "U2 L U2";break;
+						case [3, 2, 1]: alg += "B' R'";break;
+						case [4, 0, 1]: alg += "L U F U'";break;
+						case [4, 1, 0]: alg += "U' B' U";break;
+						case [4, 1, 2]: alg += "U F U'";break;
+						case [4, 2, 1]: alg += "L' U F U'";break;
+						case [5, 0, 1]: alg += "D R2";break;
+						case [5, 1, 0]: alg += "D2 R2";break;
+						case [5, 1, 2]: alg += "R2";break;
+						case [5, 2, 1]: alg += "D' R2";break;
+						default:
+							alg = "";
+							Essence.say("UR solved");
+						break;
+					}
+					switch(ul){
+						case [0, 0, 1]: alg += "B' U B U'";break;
+						case [1, 1, 0]: alg += "L'";break;
+						case [1, 1, 2]: alg += "U2 R U2";break;
+						case [1, 2, 1]: alg += "F L' F'";break;
+						case [2, 1, 0]: alg += "U' F' U";break;
+						case [2, 1, 2]: alg += "U B U'";break;
+						case [2, 2, 1]: alg += "D' S' D' S";break;
+						case [3, 0, 1]: alg += "B L";break;
+						case [3, 1, 0]: alg += "B2 L";break;
+						case [3, 1, 2]: alg += "L";break;
+						case [3, 2, 1]: alg += "B' L";break;
+						case [4, 0, 1]: alg += "L U' F U";break;
+						case [4, 1, 0]: alg += "U B' U'";break;
+						case [4, 1, 2]: alg += "U' F U";break;
+						case [4, 2, 1]: alg += "D S' D' S";break;
+						case [5, 0, 1]: alg += "D' L2";break;
+						case [5, 1, 0]: alg += "L2";break;
+						case [5, 1, 2]: alg += "D2 L2";break;
+						case [5, 2, 1]: alg += "D L2";break;
+						default:
+							alg = "";
+							Essence.say("UL solved");
+						break;
+					}
+					this.perform(alg);
+					
+				}else if(method=="advancedlbl" || method=="advlbl" || method=="albl"){
+					
+				}else if(method=="cfop" || method=="fridrich"){
+					
+				}else if(method.slice(0, 2)=="vh"){
+					
+				}else if(method=="zb"){
+					
+				}else if(method=="zz"){
+					
+				}else if(method=="roux"){
+					
+				}else if(method=="hk" || method=="kociemba" || method=="humankociemba" || method.slice(0, 11)=="2phasealg" || method.slice(0, 11)=="twophasealg"){
+					
+				}else if(method=="hta" || method=="thistlethewaite" || method=="humanthistlethewaite" || method=="ht"){
+					
+				}else if(method=="m2/op"){
+					
+				}else if(method=="op" || method=="oldpoch" || method=="oldpochman" || method=="op/op"){
+					var t="R U R' U' R' F R2 U' R' U' R U R' F'", ja="R' U2 R U R' U2 L U' R U L'", jb="R U R' F' R U R' U' R' F R2 U' R' U'", y="R U' R' U' R U R' F' R U R' U' R' F R", r="R U' R' U' R U R D R' U' R D' R' U2 R' U'";//main algs
+					var eTarget=parseInt(this.getCubieAt(0, 1, 2)), cTarget=parseInt(this.getCubieAt(0, 0, 0)), parity=false, nbEdge = 0, CB = false;
+					var alg="",
+					edgesSolved = (this.getCubieAt(0, 0, 1)==1 && this.getCubieAt(0, 1, 0)==3 && this.getCubieAt(0, 1, 2)==5 && this.getCubieAt(0, 2, 1)==7 && this.getCubieAt(1, 0, 1)==10 && this.getCubieAt(1, 1, 0)==12 && this.getCubieAt(1, 1, 2)==14 &&
+					this.getCubieAt(1, 2, 1)==16 && this.getCubieAt(2, 1, 0)==21 && this.getCubieAt(2, 1, 2)==23 && this.getCubieAt(2, 2, 1)==25 && this.getCubieAt(3, 0, 1)==28 && this.getCubieAt(3, 1, 0)==30 && this.getCubieAt(3, 1, 2)==32 &&
+					this.getCubieAt(4, 0, 1)==37 && this.getCubieAt(4, 1, 0)==39 && this.getCubieAt(4, 1, 2)==41 && this.getCubieAt(4, 2, 1)==43 && this.getCubieAt(5, 0, 1)==46 && this.getCubieAt(5, 1, 0)==48 && this.getCubieAt(5, 1, 2)==50 &&
+					this.getCubieAt(5, 2, 1)==52),
+					cornersSolved = (this.getCubieAt(0, 0, 0)==0 && this.getCubieAt(0, 0, 2)==2 && this.getCubieAt(0, 2, 0)==6 && this.getCubieAt(0, 2, 2)==8 && this.getCubieAt(5, 0, 0)==45 && this.getCubieAt(5, 0, 2)==47 && this.getCubieAt(5, 2, 0)==51 && this.getCubieAt(5, 2, 2)==53);
+					
+					while(!edgesSolved){
+						CB = false;
+						switch(eTarget){
+							case 1: alg = ja;break;
+							case 3: alg = t;break;
+							case 7: alg = jb;break;
+							case 10: alg = "M' "+ja+" M";break;
+							case 12: alg = "L' "+t+" L";break;
+							case 14: alg = "E2 L "+t+" L' E2";break;
+							case 16: alg = "M' "+jb+" M";break;
+							case 21: alg = "E' L' "+t+" L E";break;
+							case 23: alg = "E L "+t+" L' E'";break;
+							case 25: alg = "D' M' "+jb+" M D";break;
+							case 28: alg = "M "+jb+" M'";break;
+							case 30: alg = "E2 L' "+t+" L E2";break;
+							case 32: alg = "L "+t+" L'";break;
+							case 34: alg = "M "+ja+" M'";break;
+							case 37: alg = "U R U' R' F' U F R B' R B R2";break;
+							case 39: alg = "E L' "+t+" L E'";break;
+							case 41: alg = "E' L "+t+" L' E";break;
+							case 43: alg = "D M' "+jb+" M D'";break;
+							case 46: alg = "M2 "+ja+" M2";break;
+							case 48: alg = "L2 "+t+" L2";break;
+							case 50: alg = "S' "+t+" S";break;
+							case 52: alg = "M2 "+jb+" M2";break;
+							default:
+								if(this.getCubieAt(0, 1, 0)!="3") alg = t;//no set-up moves targets (U targets)
+								else if(this.getCubieAt(0, 0, 1)!="1") alg = ja;
+								else if(this.getCubieAt(0, 2, 1)!="7") alg = jb;
+								else if(this.getCubieAt(3, 1, 2)!="32") alg = "L "+t+" L'";//1 q/s* set-up targets (F/B targets)
+								else if(this.getCubieAt(3, 2, 1)!="34") alg = "M "+ja+" M'";
+								else if(this.getCubieAt(3, 0, 1)!="28") alg = "M "+jb+" M'";
+								else if(this.getCubieAt(1, 1, 0)!="12") alg = "L' "+t+" L";
+								else if(this.getCubieAt(1, 0, 1)!="10") alg = "M' "+ja+" M";
+								else if(this.getCubieAt(1, 2, 1)!="16") alg = "M' "+jb+" M";
+								else if(this.getCubieAt(5, 1, 0)!="48") alg = "L2 "+t+" L2";//1 f/s* set-up targets (D targets)
+								else if(this.getCubieAt(5, 0, 1)!="46") alg = "M2 "+ja+" M2";
+								else if(this.getCubieAt(5, 2, 1)!="52") alg = "M2 "+jb+" M2";
+								else if(this.getCubieAt(5, 1, 2)!="50") alg = "S' "+t+" S";//1 e* set-up targets along the buffer-help line
+								else{Essence.say("Sir, all 0-1 setup move edges targets are solved !", "info");CB = true;}
+							break;
+						}
+						this.perform(alg);
+						nbEdge++;
+						eTarget=(CB)? this.getUnsolvedStickers("n")[0]: parseInt(this.getCubieAt(0, 1, 2));
+						edgesSolved = (this.getCubieAt(0, 0, 1)==1 && this.getCubieAt(0, 1, 0)==3 && this.getCubieAt(0, 1, 2)==5 && this.getCubieAt(0, 2, 1)==7 && this.getCubieAt(1, 0, 1)==10 && this.getCubieAt(1, 1, 0)==12 && this.getCubieAt(1, 1, 2)==14 &&
+					this.getCubieAt(1, 2, 1)==16 && this.getCubieAt(2, 1, 0)==21 && this.getCubieAt(2, 1, 2)==23 && this.getCubieAt(2, 2, 1)==25 && this.getCubieAt(3, 0, 1)==28 && this.getCubieAt(3, 1, 0)==30 && this.getCubieAt(3, 1, 2)==32 &&
+					this.getCubieAt(4, 0, 1)==37 && this.getCubieAt(4, 1, 0)==39 && this.getCubieAt(4, 1, 2)==41 && this.getCubieAt(4, 2, 1)==43 && this.getCubieAt(5, 0, 1)==46 && this.getCubieAt(5, 1, 0)==48 && this.getCubieAt(5, 1, 2)==50 &&
+					this.getCubieAt(5, 2, 1)==52);
+						if(eTarget==5 && edgesSolved) break;
+					}
+					if(nbEdge%2!=0) parity = true;
+					if(parity){
+						this.perform(r);
+						Essence.say("Parity using OP/OP on the 3x3", "info");
+					}
+					ja = "R' U L' U2 R U' R' U2 R L U'";
+					jb = "L U2 L' U' L U2 R' U L' U' R";
+					while(!cornersSolved){
+						CB = false
+						switch(cTarget){
+							case 2: alg = ja;break;
+							case 6: alg = jb;break;
+							case 8: alg = "F "+y+" F'";break;
+							case 9: alg = "F' D "+y+" D' F";break;
+							case 11: alg = "R "+ja+" R'";break;
+							case 15: alg = "D "+y+" D'";break;
+							case 17: alg = "F D "+y+" D' F'";break;
+							case 18: alg = "R' "+y+" R";break;
+							case 20: alg = "R2 "+y+" R2";break;
+							case 24: alg = y;break;
+							case 26: alg = "R "+y+" R'";break;
+							case 27: alg = "R' F "+y+" F' R";break;
+							case 33: alg = "D' "+y+" D";break;
+							case 35: alg = "D F "+jb+" F' D'";break;
+							case 38: alg = "F2 "+y+" F2";break;
+							case 42: alg = "D2 "+y+" D2";break;
+							case 44: alg = "F "+jb+" F'";break;
+							case 45: alg = "F' "+y+" F";break;
+							case 47: alg = "F2 "+jb+" F2";break;
+							case 48: alg = "L2 "+t+" L2";break;
+							case 51: alg = "D F' "+y+" F D'";break;
+							case 53: alg = "R2 F "+y+" F' R2";break;
+							default:
+								if(this.getCubieAt(0, 0, 2)!="2") alg = ja;
+								else if(this.getCubieAt(0, 2, 0)!="6") alg = jb;
+								else if(this.getCubieAt(2, 2, 0)!="24") alg = y;
+								else if(this.getCubieAt(1, 0, 2)!="11") alg = "R "+ja+" R'";
+								else if(this.getCubieAt(4, 2, 2)!="44") alg = "F "+jb+" F'";
+								else if(this.getCubieAt(1, 2, 0)!="15") alg = "D "+y+" D'";
+								else if(this.getCubieAt(0, 2, 2)!="8") alg = "F "+y+" F'";
+								else if(this.getCubieAt(2, 2, 2)!="26") alg = "R "+y+" R'";
+								else if(this.getCubieAt(3, 2, 0)!="33") alg = "R' "+ja+" R";
+								else if(this.getCubieAt(2, 0, 0)!="18") alg = "F' "+jb+" F";
+								else if(this.getCubieAt(5, 0, 0)!="45") alg = "F' "+y+" F";
+								else if(this.getCubieAt(5, 0, 2)!="47") alg = "R2 "+ja+" R2";
+								else if(this.getCubieAt(4, 2, 0)!="42") alg = "D2 "+y+" D2";
+								else if(this.getCubieAt(4, 0, 2)!="38") alg = "F2 "+y+" F2";
+								else if(this.getCubieAt(2, 0, 2)!="20") alg = "R2 "+y+" R2";
+								else{Essence.say("Sir, all 0-1 setup move corners targets are solved !", "info");cCycleBreak=true;}
+							break;
+						}
+						this.perform(alg);
+						cTarget=(CB)? this.getUnsolvedStickers("n")[0]: parseInt(this.getCubieAt(0, 0, 0));
+						cornersSolved = (this.getCubieAt(0, 0, 0)==0 && this.getCubieAt(0, 0, 2)==2 && this.getCubieAt(0, 2, 0)==6 && this.getCubieAt(0, 2, 2)==8 && this.getCubieAt(5, 0, 0)==45 && this.getCubieAt(5, 0, 2)==47 && this.getCubieAt(5, 2, 0)==51 && this.getCubieAt(5, 2, 2)==53);
+						if(cTarget==0 && cornersSolved) break;
+					}
+					
+				}else if(method=="m2/r2"){
+					
+				}else if(method=="u2" || method=="u2/u2"){
+					
+				}else if(method=="turbo/op"){
+					
+				}else if(method=="turbo" || method=="turbo/turbo"){
+					
+				}else if(method=="cf" || method=="cornerfirst"){
+					
+				}else if(method=="ef" || method=="edgefirst"){
+					
+				}else if(method=="squareop" || method=="sqop"){
+					
+				}else if(method=="3style" || method=="3-style" || method.slice(0, 3)=="com"){
+					
+				}else if(method=="keyhole" || method=="kh"){
+					
+				}else if(method=="tf" || method=="trifra" || method=="triangularfrancisco"){
+					
+				}else if(method=="mg" || method=="mgls" || method=="mgf2l"){
+					
+				}else if(method=="cfce" || method=="c/e" || method=="cll/ell"){
+					
+				}else if(method=="columnfirst" || method=="cmf" || method=="columnf"){
+					
+				}else if(method=="waterman"){
+					
+				}else if(method=="omopp"){
+					
+				}else if(method=="petrus"){
+					
+				}else this.solve("undo");
+			}else if(this.format=="4x4x4"){
+				if(method=="undo"){
+					while(!this.isSolved || this.moveHistory.length>0){
+						this.undo();
+						this.draw();
+					}
+				}else if(method=="redux" || method=="reduction"){
+						
+					//3x3 stage
+				}else if(method=="k4" || method=="lbl"){
+					
+				}else if(method=="yau" || method=="yau4"){
+					
+				}else if(method=="hoya" || method=="hoya4"){
+					
+				}else if(method=="cage" || method=="centrelast"){
+					
+				}else if(method=="oblbl"){
+					
+				}else if(method=="z4"){
+					
+				}else if(method=="meyer"){
+					
+				}else if(method=="stadler"){
+					
+				}else if(method=="petrus4" || method=="p4"){
+					
+				}else if(method=="u2/r2/u2"){
+					
+				}else if(method=="3style" || method=="3-style" || method.slice(0, 3)=="com"){
+					
+				}else this.solve("undo");
+			}else Essence.say("The cube's format isn't supported.", "error");
+			}
+			this.draw();
+		}
+		this.isSolved = function(){
+			if(this.format=="2x2x2") return this.toStr() == range(0, 1, 23).join(" ");
+			else if(this.format=="3x3x3") return this.toStr() == range(0, 1, 53).join(" ");
+			else if(this.format=="4x4x4") return this.toStr() == range(0, 1, 95).join(" ");
+		}
+		this.rotX = function(theta){//face 1, 3 and 5 are wrong
+			var tmp = cube.grid[0];
+			this.grid[2] = this.grid[2].rot(90);
+			cube.grid[0] = cube.grid[1];
+			cube.grid[1] = cube.grid[5];
+			cube.grid[5] = this.grid[3].rot(180);
+			cube.grid[3] = tmp.rot(180);
+			this.grid[4] = this.grid[4].rot(90);
+		}
+		this.rotXi = function(theta){
+			var tmp = cube.grid[0];
+			this.grid[2] = this.grid[2].rot(-90);
+			cube.grid[0] = cube.grid[3];
+			cube.grid[3] = cube.grid[5];
+			cube.grid[5]= this.grid[1].rot(180);
+			cube.grid[1]= tmp.rot(180);
+			this.grid[4] = this.grid[4].rot(-90);
+		}
+		this.rotX2 = function(theta){
+			var tmp = cube.grid[0];
+			this.grid[2] = this.grid[2].rot(180);
+			cube.grid[0] = cube.grid[1];
+			cube.grid[1] = cube.grid[5];
+			cube.grid[5] = this.grid[3].rot(180);
+			cube.grid[3] = tmp.rot(180);
+			this.grid[4] = this.grid[4].rot(180);
+			tmp = cube.grid[0];
+			cube.grid[0] = cube.grid[1];
+			cube.grid[1] = cube.grid[5];
+			cube.grid[5] = this.grid[3].rot(180);
+			cube.grid[3] = tmp.rot(180);
+		}
+		this.rotY = function(theta){
+			var tmp = cube.grid[1];
+			this.grid[0] = this.grid[0].rot(90);
+			cube.grid[1] = cube.grid[2];
+			cube.grid[2] = cube.grid[3];
+			cube.grid[3] = cube.grid[4];
+			cube.grid[4] = tmp;
+			this.grid[5] = this.grid[5].rot(90);
+		}
+		this.rotYi = function(theta){
+			var tmp = cube.grid[1];
+			this.grid[0] = this.grid[0].rot(-90);
+			cube.grid[1] = cube.grid[4];
+			cube.grid[4] = cube.grid[3];
+			cube.grid[3] = cube.grid[2];
+			cube.grid[2] = tmp;
+			this.grid[5] = this.grid[5].rot(-90);
+		}
+		this.rotY2 = function(theta){
+			var tmp = cube.grid[1];
+			this.grid[0] = this.grid[0].rot(180);
+			cube.grid[1] = cube.grid[2];
+			cube.grid[2] = cube.grid[3];
+			cube.grid[3] = cube.grid[4];
+			cube.grid[4] = tmp;
+			this.grid[5] = this.grid[5].rot(180);
+			tmp = cube.grid[1];
+			cube.grid[1] = cube.grid[2];
+			cube.grid[2] = cube.grid[3];
+			cube.grid[3] = cube.grid[4];
+			cube.grid[4] = tmp;
+		}
+		this.rotZ = function(theta){//to fix
+			var tmp = cube.grid[0];
+			this.grid[1] = this.grid[1].rot(90);
+			cube.grid[0] = cube.grid[4];
+			cube.grid[4] = cube.grid[5];
+			cube.grid[5] = cube.grid[2];
+			cube.grid[2] = tmp;
+			this.grid[3] = this.grid[3].rot(90);
+		}
+		this.rotZi = function(theta){//to fix
+			var tmp = cube.grid[0];
+			this.grid[1] = this.grid[1].rot(-90);
+			cube.grid[0] = cube.grid[2];
+			cube.grid[2] = cube.grid[5];
+			cube.grid[5] = cube.grid[4];
+			cube.grid[4] = tmp;
+			this.grid[3] = this.grid[3].rot(-90);
+		}
+		this.rotZ2 = function(theta){
+			var tmp = cube.grid[0];
+			this.grid[1] = this.grid[1].rot(180);
+			cube.grid[0] = cube.grid[4];
+			cube.grid[4] = cube.grid[5];
+			cube.grid[5] = cube.grid[2];
+			cube.grid[2] = tmp;
+			this.grid[3] = this.grid[3].rot(180);
+			tmp = cube.grid[0];
+			cube.grid[0] = cube.grid[4];
+			cube.grid[4] = cube.grid[5];
+			cube.grid[5] = cube.grid[2];
+			cube.grid[2] = tmp;
+		}
+		this.perform = function(alg, show, tps, d){//execute an alg
+			//adding a [a, b], (a b)n support ?
+			var m=alg.split(" ");
+			if(isNon(tps)) tps = 3;
+			if(isNon(d)) d = 2;
+			if(show){
+				for(i=0; i<m.length; i++){
+					this.move(m[i]);
+					setTimeout(this.draw(d), 1000/tps);
+					clearTimeout();
+				}
+			}else{
+				for(i=0; i<m.length; i++) this.move(m[i]);
+				this.draw(d);
+			}
+		}
+		this.move = function(m){
+			if(this.format=="3x3x3"){
+				switch(m){
+					case "U":
+						var tmpC = this.grid[1][0][0], tmpE = this.grid[1][0][1];
+						this.grid[0] = this.grid[0].rot(90);
+						this.grid[1][0][0] = this.grid[2][0][0];
+						this.grid[2][0][0] = this.grid[3][0][0];
+						this.grid[3][0][0] = this.grid[4][0][0];
+						this.grid[4][0][0] = tmpC;
+						tmpC = this.grid[1][0][2];
+						this.grid[1][0][2] = this.grid[2][0][2];
+						this.grid[2][0][2] = this.grid[3][0][2];
+						this.grid[3][0][2] = this.grid[4][0][2];
+						this.grid[4][0][2] = tmpC;
+						this.grid[1][0][1] = this.grid[2][0][1];
+						this.grid[2][0][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = this.grid[4][0][1];
+						this.grid[4][0][1] = tmpE;
+					break;
+					case "U'":
+						var tmpC = this.grid[1][0][0], tmpE = this.grid[1][0][1];
+						this.grid[0] = this.grid[0].rot(-90);
+						this.grid[1][0][0] = this.grid[4][0][0];
+						this.grid[4][0][0] = this.grid[3][0][0];
+						this.grid[3][0][0] = this.grid[2][0][0];
+						this.grid[2][0][0] = tmpC;
+						tmpC = this.grid[1][0][2];
+						this.grid[1][0][2] = this.grid[4][0][2];
+						this.grid[4][0][2] = this.grid[3][0][2];
+						this.grid[3][0][2] = this.grid[2][0][2];
+						this.grid[2][0][2] = tmpC;
+						this.grid[1][0][1] = this.grid[4][0][1];
+						this.grid[4][0][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = this.grid[2][0][1];
+						this.grid[2][0][1] = tmpE;
+					break;
+					case "U2":
+						var tmpC = this.grid[1][0][0], tmpE = this.grid[1][0][1];
+						this.grid[0] = this.grid[0].rot(180);
+						this.grid[1][0][0] = this.grid[2][0][0];
+						this.grid[2][0][0] = this.grid[3][0][0];
+						this.grid[3][0][0] = this.grid[4][0][0];
+						this.grid[4][0][0] = tmpC;
+						tmpC = this.grid[1][0][2];
+						this.grid[1][0][2] = this.grid[2][0][2];
+						this.grid[2][0][2] = this.grid[3][0][2];
+						this.grid[3][0][2] = this.grid[4][0][2];
+						this.grid[4][0][2] = tmpC;
+						this.grid[1][0][1] = this.grid[2][0][1];
+						this.grid[2][0][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = this.grid[4][0][1];
+						this.grid[4][0][1] = tmpE;
+						tmpC = this.grid[1][0][0]; tmpE = this.grid[1][0][1];
+						this.grid[1][0][0] = this.grid[2][0][0];
+						this.grid[2][0][0] = this.grid[3][0][0];
+						this.grid[3][0][0] = this.grid[4][0][0];
+						this.grid[4][0][0] = tmpC;
+						tmpC = this.grid[1][0][2];
+						this.grid[1][0][2] = this.grid[2][0][2];
+						this.grid[2][0][2] = this.grid[3][0][2];
+						this.grid[3][0][2] = this.grid[4][0][2];
+						this.grid[4][0][2] = tmpC;
+						this.grid[1][0][1] = this.grid[2][0][1];
+						this.grid[2][0][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = this.grid[4][0][1];
+						this.grid[4][0][1] = tmpE;
+					break;
+					case "F":
+						var tmpC = this.grid[5][0][0], tmpE = this.grid[5][0][1];
+						this.grid[1] = this.grid[1].rot(90);
+						this.grid[5][0][0] = this.grid[2][2][0];
+						this.grid[2][2][0] = this.grid[0][2][2];
+						this.grid[0][2][2] = this.grid[4][0][2];
+						this.grid[4][0][2] = tmpC;
+						tmpC = this.grid[5][0][2];
+						this.grid[5][0][2] = this.grid[2][0][0];
+						this.grid[2][0][0] = this.grid[0][2][0];
+						this.grid[0][2][0] = this.grid[4][2][2];
+						this.grid[4][2][2] = tmpC;
+						this.grid[5][0][1] = this.grid[2][1][0];
+						this.grid[2][1][0] = this.grid[0][2][1];
+						this.grid[0][2][1] = this.grid[4][1][2];
+						this.grid[4][1][2] = tmpE;
+					break;
+					case "F'":
+						var tmpC = this.grid[5][0][0], tmpE = this.grid[5][0][1];
+						this.grid[1] = this.grid[1].rot(-90);
+						this.grid[5][0][0] = this.grid[4][0][2];
+						this.grid[4][0][2] = this.grid[0][2][2];
+						this.grid[0][2][2] = this.grid[2][2][0];
+						this.grid[2][2][0] = tmpC;
+						tmpC = this.grid[5][0][2];
+						this.grid[5][0][2] = this.grid[4][2][2];
+						this.grid[4][2][2] = this.grid[0][2][0];
+						this.grid[0][2][0] = this.grid[2][0][0];
+						this.grid[2][0][0] = tmpC;
+						this.grid[5][0][1] = this.grid[4][1][2];
+						this.grid[4][1][2] = this.grid[0][2][1];
+						this.grid[0][2][1] = this.grid[2][1][0];
+						this.grid[2][1][0] = tmpE;
+					break;
+					case "F2":
+						var tmpC = this.grid[5][0][0], tmpE = this.grid[5][0][1];
+						this.grid[1] = this.grid[1].rot(180);
+						this.grid[5][0][0] = this.grid[2][2][0];
+						this.grid[2][2][0] = this.grid[0][2][2];
+						this.grid[0][2][2] = this.grid[4][0][2];
+						this.grid[4][0][2] = tmpC;
+						tmpC = this.grid[5][0][2];
+						this.grid[5][0][2] = this.grid[2][0][0];
+						this.grid[2][0][0] = this.grid[0][2][0];
+						this.grid[0][2][0] = this.grid[4][2][2];
+						this.grid[4][2][2] = tmpC;
+						this.grid[5][0][1] = this.grid[2][1][0];
+						this.grid[2][1][0] = this.grid[0][2][1];
+						this.grid[0][2][1] = this.grid[4][1][2];
+						this.grid[4][1][2] = tmpE;
+						tmpC = this.grid[5][0][0]; tmpE = this.grid[5][0][1];
+						this.grid[5][0][0] = this.grid[2][2][0];
+						this.grid[2][2][0] = this.grid[0][2][2];
+						this.grid[0][2][2] = this.grid[4][0][2];
+						this.grid[4][0][2] = tmpC;
+						tmpC = this.grid[5][0][2];
+						this.grid[5][0][2] = this.grid[2][0][0];
+						this.grid[2][0][0] = this.grid[0][2][0];
+						this.grid[0][2][0] = this.grid[4][2][2];
+						this.grid[4][2][2] = tmpC;
+						this.grid[5][0][1] = this.grid[2][1][0];
+						this.grid[2][1][0] = this.grid[0][2][1];
+						this.grid[0][2][1] = this.grid[4][1][2];
+						this.grid[4][1][2] = tmpE;
+					break;
+					case "R":
+						var tmpC = this.grid[5][0][2], tmpE = this.grid[5][1][2];
+						this.grid[2] = this.grid[2].rot(90);
+						this.grid[5][0][2] = this.grid[3][2][0];
+						this.grid[3][2][0] = this.grid[0][0][2];
+						this.grid[0][0][2] = this.grid[1][0][2];
+						this.grid[1][0][2] = tmpC;
+						tmpC = this.grid[5][2][2];
+						this.grid[5][2][2] = this.grid[3][0][0];
+						this.grid[3][0][0] = this.grid[0][2][2];
+						this.grid[0][2][2] = this.grid[1][2][2];
+						this.grid[1][2][2] = tmpC;
+						this.grid[5][1][2] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[0][1][2];
+						this.grid[0][1][2] = this.grid[1][1][2];
+						this.grid[1][1][2] = tmpE;
+					break;
+					case "R'":
+						var tmpC = this.grid[5][0][2], tmpE = this.grid[5][1][2];
+						this.grid[2] = this.grid[2].rot(-90);
+						this.grid[5][0][2] = this.grid[1][0][2];
+						this.grid[1][0][2] = this.grid[0][0][2];
+						this.grid[0][0][2] = this.grid[3][2][0];
+						this.grid[3][2][0] = tmpC;
+						tmpC = this.grid[5][2][2];
+						this.grid[5][2][2] = this.grid[1][2][2];
+						this.grid[1][2][2] = this.grid[0][2][2];
+						this.grid[0][2][2] = this.grid[3][0][0];
+						this.grid[3][0][0] = tmpC;
+						this.grid[5][1][2] = this.grid[1][1][2];
+						this.grid[1][1][2] = this.grid[0][1][2];
+						this.grid[0][1][2] = this.grid[3][1][0];
+						this.grid[3][1][0] = tmpE;
+					break;
+					case "R2":
+						var tmpC = this.grid[5][0][2], tmpE = this.grid[5][1][2];
+						this.grid[2] = this.grid[2].rot(180);
+						this.grid[5][0][2] = this.grid[3][2][0];
+						this.grid[3][2][0] = this.grid[0][0][2];
+						this.grid[0][0][2] = this.grid[1][0][2];
+						this.grid[1][0][2] = tmpC;
+						tmpC = this.grid[5][2][2];
+						this.grid[5][2][2] = this.grid[3][0][0];
+						this.grid[3][0][0] = this.grid[0][2][2];
+						this.grid[0][2][2] = this.grid[1][2][2];
+						this.grid[1][2][2] = tmpC;
+						this.grid[5][1][2] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[0][1][2];
+						this.grid[0][1][2] = this.grid[1][1][2];
+						this.grid[1][1][2] = tmpE;
+						tmpC = this.grid[5][0][2]; tmpE = this.grid[5][1][2];
+						this.grid[5][0][2] = this.grid[3][2][0];
+						this.grid[3][2][0] = this.grid[0][0][2];
+						this.grid[0][0][2] = this.grid[1][0][2];
+						this.grid[1][0][2] = tmpC;
+						tmpC = this.grid[5][2][2];
+						this.grid[5][2][2] = this.grid[3][0][0];
+						this.grid[3][0][0] = this.grid[0][2][2];
+						this.grid[0][2][2] = this.grid[1][2][2];
+						this.grid[1][2][2] = tmpC;
+						this.grid[5][1][2] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[0][1][2];
+						this.grid[0][1][2] = this.grid[1][1][2];
+						this.grid[1][1][2] = tmpE;
+					break;
+					case "B":
+						var tmpC = this.grid[0][0][0], tmpE = this.grid[0][0][1];
+						this.grid[3] = this.grid[3].rot(90);
+						this.grid[0][0][0] = this.grid[2][0][2];
+						this.grid[2][0][2] = this.grid[5][2][2];
+						this.grid[5][2][2] = this.grid[4][2][0];
+						this.grid[4][2][0] = tmpC;
+						tmpC = this.grid[0][0][2];
+						this.grid[0][0][2] = this.grid[2][2][2];
+						this.grid[2][2][2] = this.grid[5][2][0];
+						this.grid[5][2][0] = this.grid[4][0][0];
+						this.grid[4][0][0] = tmpC;
+						this.grid[0][0][1] = this.grid[2][1][2];
+						this.grid[2][1][2] = this.grid[5][2][1];
+						this.grid[5][2][1] = this.grid[4][1][0];
+						this.grid[4][1][0] = tmpE;
+					break;
+					case "B'":
+						var tmpC = this.grid[0][0][0], tmpE = this.grid[0][0][1];
+						this.grid[3] = this.grid[3].rot(-90);
+						this.grid[0][0][0] = this.grid[4][2][0];
+						this.grid[4][2][0] = this.grid[5][2][2];
+						this.grid[5][2][2] = this.grid[2][0][2];
+						this.grid[2][0][2] = tmpC;
+						tmpC = this.grid[0][0][2];
+						this.grid[0][0][2] = this.grid[4][0][0];
+						this.grid[4][0][0] = this.grid[5][2][0];
+						this.grid[5][2][0] = this.grid[2][2][2];
+						this.grid[2][2][2] = tmpC;
+						this.grid[0][0][1] = this.grid[4][1][0];
+						this.grid[4][1][0] = this.grid[5][2][1];
+						this.grid[5][2][1] = this.grid[2][1][2];
+						this.grid[2][1][2] = tmpE;
+					break;
+					case "B2":
+						var tmpC = this.grid[0][0][0], tmpE = this.grid[0][0][1];
+						this.grid[3] = this.grid[3].rot(180);
+						this.grid[0][0][0] = this.grid[2][0][2];
+						this.grid[2][0][2] = this.grid[5][2][2];
+						this.grid[5][2][2] = this.grid[4][2][0];
+						this.grid[4][2][0] = tmpC;
+						tmpC = this.grid[0][0][2];
+						this.grid[0][0][2] = this.grid[2][2][2];
+						this.grid[2][2][2] = this.grid[5][2][0];
+						this.grid[5][2][0] = this.grid[4][0][0];
+						this.grid[4][0][0] = tmpC;
+						this.grid[0][0][1] = this.grid[2][1][2];
+						this.grid[2][1][2] = this.grid[5][2][1];
+						this.grid[5][2][1] = this.grid[4][1][0];
+						this.grid[4][1][0] = tmpE;
+						tmpC = this.grid[0][0][0]; tmpE = this.grid[0][0][1];
+						this.grid[0][0][0] = this.grid[2][0][2];
+						this.grid[2][0][2] = this.grid[5][2][2];
+						this.grid[5][2][2] = this.grid[4][2][0];
+						this.grid[4][2][0] = tmpC;
+						tmpC = this.grid[0][0][2];
+						this.grid[0][0][2] = this.grid[2][2][2];
+						this.grid[2][2][2] = this.grid[5][2][0];
+						this.grid[5][2][0] = this.grid[4][0][0];
+						this.grid[4][0][0] = tmpC;
+						this.grid[0][0][1] = this.grid[2][1][2];
+						this.grid[2][1][2] = this.grid[5][2][1];
+						this.grid[5][2][1] = this.grid[4][1][0];
+						this.grid[4][1][0] = tmpE;
+					break;
+					case "L":
+						var tmpC = this.grid[5][0][0], tmpE = this.grid[5][1][0];
+						this.grid[4] = this.grid[4].rot(90);
+						this.grid[5][0][0] = this.grid[1][0][0];
+						this.grid[1][0][0] = this.grid[0][0][0];
+						this.grid[0][0][0] = this.grid[3][2][2];
+						this.grid[3][2][2] = tmpC;
+						tmpC = this.grid[5][2][0];
+						this.grid[5][2][0] = this.grid[1][2][0];
+						this.grid[1][2][0] = this.grid[0][2][0];
+						this.grid[0][2][0] = this.grid[3][0][2];
+						this.grid[3][0][2] = tmpC;
+						this.grid[5][1][0] = this.grid[1][1][0];
+						this.grid[1][1][0] = this.grid[0][1][0];
+						this.grid[0][1][0] = this.grid[3][1][2];
+						this.grid[3][1][2] = tmpE;
+					break;
+					case "L'":
+						var tmpC = this.grid[5][0][0], tmpE = this.grid[5][1][0];
+						this.grid[4] = this.grid[4].rot(-90);
+						this.grid[5][0][0] = this.grid[3][2][2];
+						this.grid[3][2][2] = this.grid[0][0][0];
+						this.grid[0][0][0] = this.grid[1][0][0];
+						this.grid[1][0][0] = tmpC;
+						tmpC = this.grid[5][2][0];
+						this.grid[5][2][0] = this.grid[3][0][2];
+						this.grid[3][0][2] = this.grid[0][2][0];
+						this.grid[0][2][0] = this.grid[1][2][0];
+						this.grid[1][2][0] = tmpC;
+						this.grid[5][1][0] = this.grid[3][1][2];
+						this.grid[3][1][2] = this.grid[0][1][0];
+						this.grid[0][1][0] = this.grid[1][1][0];
+						this.grid[1][1][0] = tmpE;
+					break;
+					case "L2":
+						var tmpC = this.grid[5][0][0], tmpE = this.grid[5][1][0];
+						this.grid[4] = this.grid[4].rot(180);
+						this.grid[5][0][0] = this.grid[1][0][0];
+						this.grid[1][0][0] = this.grid[0][0][0];
+						this.grid[0][0][0] = this.grid[3][2][2];
+						this.grid[3][2][2] = tmpC;
+						tmpC = this.grid[5][2][0];
+						this.grid[5][2][0] = this.grid[1][2][0];
+						this.grid[1][2][0] = this.grid[0][2][0];
+						this.grid[0][2][0] = this.grid[3][0][2];
+						this.grid[3][0][2] = tmpC;
+						this.grid[5][1][0] = this.grid[1][1][0];
+						this.grid[1][1][0] = this.grid[0][1][0];
+						this.grid[0][1][0] = this.grid[3][1][2];
+						this.grid[3][1][2] = tmpE;
+						tmpC = this.grid[5][0][0]; tmpE = this.grid[5][1][0];
+						this.grid[5][0][0] = this.grid[1][0][0];
+						this.grid[1][0][0] = this.grid[0][0][0];
+						this.grid[0][0][0] = this.grid[3][2][2];
+						this.grid[3][2][2] = tmpC;
+						tmpC = this.grid[5][2][0];
+						this.grid[5][2][0] = this.grid[1][2][0];
+						this.grid[1][2][0] = this.grid[0][2][0];
+						this.grid[0][2][0] = this.grid[3][0][2];
+						this.grid[3][0][2] = tmpC;
+						this.grid[5][1][0] = this.grid[1][1][0];
+						this.grid[1][1][0] = this.grid[0][1][0];
+						this.grid[0][1][0] = this.grid[3][1][2];
+						this.grid[3][1][2] = tmpE;
+					break;
+					case "D":
+						var tmpC = this.grid[1][2][2], tmpE = this.grid[1][2][1];
+						this.grid[5] = this.grid[5].rot(90);
+						this.grid[1][2][2] = this.grid[4][2][2];
+						this.grid[4][2][2] = this.grid[3][2][2];
+						this.grid[3][2][2] = this.grid[2][2][2];
+						this.grid[2][2][2] = tmpC;
+						tmpC = this.grid[1][2][0];
+						this.grid[1][2][0] = this.grid[4][2][0];
+						this.grid[4][2][0] = this.grid[3][2][0];
+						this.grid[3][2][0] = this.grid[2][2][0];
+						this.grid[2][2][0] = tmpC;
+						this.grid[1][2][1] = this.grid[4][2][1];
+						this.grid[4][2][1] = this.grid[3][2][1];
+						this.grid[3][2][1] = this.grid[2][2][1];
+						this.grid[2][2][1] = tmpE;
+					break;
+					case "D'":
+						var tmpC = this.grid[1][2][2], tmpE = this.grid[1][2][1];
+						this.grid[5] = this.grid[5].rot(-90);
+						this.grid[1][2][2] = this.grid[2][2][2];
+						this.grid[2][2][2] = this.grid[3][2][2];
+						this.grid[3][2][2] = this.grid[4][2][2];
+						this.grid[4][2][2] = tmpC;
+						tmpC = this.grid[1][2][0];
+						this.grid[1][2][0] = this.grid[2][2][0];
+						this.grid[2][2][0] = this.grid[3][2][0];
+						this.grid[3][2][0] = this.grid[4][2][0];
+						this.grid[4][2][0] = tmpC;
+						this.grid[1][2][1] = this.grid[2][2][1];
+						this.grid[2][2][1] = this.grid[3][2][1];
+						this.grid[3][2][1] = this.grid[4][2][1];
+						this.grid[4][2][1] = tmpE;
+					break;
+					case "D2":
+						var tmpC = this.grid[1][2][2], tmpE = this.grid[1][2][1];
+						this.grid[5] = this.grid[5].rot(180);
+						this.grid[1][2][2] = this.grid[4][2][2];
+						this.grid[4][2][2] = this.grid[3][2][2];
+						this.grid[3][2][2] = this.grid[2][2][2];
+						this.grid[2][2][2] = tmpC;
+						tmpC = this.grid[1][2][0];
+						this.grid[1][2][0] = this.grid[4][2][0];
+						this.grid[4][2][0] = this.grid[3][2][0];
+						this.grid[3][2][0] = this.grid[2][2][0];
+						this.grid[2][2][0] = tmpC;
+						this.grid[1][2][1] = this.grid[4][2][1];
+						this.grid[4][2][1] = this.grid[3][2][1];
+						this.grid[3][2][1] = this.grid[2][2][1];
+						this.grid[2][2][1] = tmpE;
+						tmpC = this.grid[1][2][2]; tmpE = this.grid[1][2][1];
+						this.grid[1][2][2] = this.grid[4][2][2];
+						this.grid[4][2][2] = this.grid[3][2][2];
+						this.grid[3][2][2] = this.grid[2][2][2];
+						this.grid[2][2][2] = tmpC;
+						tmpC = this.grid[1][2][0];
+						this.grid[1][2][0] = this.grid[4][2][0];
+						this.grid[4][2][0] = this.grid[3][2][0];
+						this.grid[3][2][0] = this.grid[2][2][0];
+						this.grid[2][2][0] = tmpC;
+						this.grid[1][2][1] = this.grid[4][2][1];
+						this.grid[4][2][1] = this.grid[3][2][1];
+						this.grid[3][2][1] = this.grid[2][2][1];
+						this.grid[2][2][1] = tmpE;
+					break;
+					case "u":
+						var tmpC = this.grid[1][0][0], tmpE = this.grid[1][0][1];
+						this.grid[0] = this.grid[0].rot(90);
+						this.grid[1][0][0] = this.grid[2][0][0];
+						this.grid[2][0][0] = this.grid[3][0][0];
+						this.grid[3][0][0] = this.grid[4][0][0];
+						this.grid[4][0][0] = tmpC;
+						tmpC = this.grid[1][0][2];
+						this.grid[1][0][2] = this.grid[2][0][2];
+						this.grid[2][0][2] = this.grid[3][0][2];
+						this.grid[3][0][2] = this.grid[4][0][2];
+						this.grid[4][0][2] = tmpC;
+						this.grid[1][0][1] = this.grid[2][0][1];
+						this.grid[2][0][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = this.grid[4][0][1];
+						this.grid[4][0][1] = tmpE;
+						tmpE = this.grid[1][1][0]; tmpC = this.grid[1][1][1];
+						this.grid[1][1][0] = this.grid[2][1][0];
+						this.grid[2][1][0] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[4][1][0];
+						this.grid[4][1][0] = tmpE;
+						this.grid[1][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = tmpC;
+						tmpE = this.grid[1][1][2];
+						this.grid[1][1][2] = this.grid[2][1][2];
+						this.grid[2][1][2] = this.grid[3][1][2];
+						this.grid[3][1][2] = this.grid[4][1][2];
+						this.grid[4][1][2] = tmpE;
+					break;
+					break;
+					case "u'":
+						var tmpC1 = this.grid[1][0][0], tmpE1 = this.grid[1][0][1];
+						this.grid[0] = this.grid[0].rot(-90);
+						
+						this.grid[1][0][0] = this.grid[4][0][0];
+						this.grid[4][0][0] = this.grid[3][0][0];
+						this.grid[3][0][0] = this.grid[2][0][0];
+						this.grid[2][0][0] = tmpC1;
+						tmpC1 = this.grid[1][0][2];
+						this.grid[1][0][2] = this.grid[4][0][2];
+						this.grid[4][0][2] = this.grid[3][0][2];
+						this.grid[3][0][2] = this.grid[2][0][2];
+						this.grid[2][0][2] = tmpC1;
+						this.grid[1][0][1] = this.grid[4][0][1];
+						this.grid[4][0][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = this.grid[2][0][1];
+						this.grid[2][0][1] = tmpE1;
+						var tmpE = this.grid[1][1][0], tmpC = this.grid[1][1][1];
+						this.grid[1][1][0] = this.grid[4][1][0];
+						this.grid[4][1][0] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[2][1][0];
+						this.grid[2][1][0] = tmpE;
+						this.grid[1][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = tmpC;
+						tmpE = this.grid[1][1][2];
+						this.grid[1][1][2] = this.grid[4][1][2];
+						this.grid[4][1][2] = this.grid[3][1][2];
+						this.grid[3][1][2] = this.grid[2][1][2];
+						this.grid[2][1][2] = tmpE;
+					break;
+					case "u2":
+						var tmpC = this.grid[1][0][0], tmpE = this.grid[1][0][1];
+						this.grid[0] = this.grid[0].rot(180);
+						this.grid[1][0][0] = this.grid[2][0][0];
+						this.grid[2][0][0] = this.grid[3][0][0];
+						this.grid[3][0][0] = this.grid[4][0][0];
+						this.grid[4][0][0] = tmpC;
+						tmpC = this.grid[1][0][2];
+						this.grid[1][0][2] = this.grid[2][0][2];
+						this.grid[2][0][2] = this.grid[3][0][2];
+						this.grid[3][0][2] = this.grid[4][0][2];
+						this.grid[4][0][2] = tmpC;
+						this.grid[1][0][1] = this.grid[2][0][1];
+						this.grid[2][0][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = this.grid[4][0][1];
+						this.grid[4][0][1] = tmpE;
+						tmpE = this.grid[1][1][0]; tmpC = this.grid[1][1][1];
+						this.grid[1][1][0] = this.grid[2][1][0];
+						this.grid[2][1][0] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[4][1][0];
+						this.grid[4][1][0] = tmpE;
+						this.grid[1][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = tmpC;
+						tmpE = this.grid[1][1][2];
+						this.grid[1][1][2] = this.grid[2][1][2];
+						this.grid[2][1][2] = this.grid[3][1][2];
+						this.grid[3][1][2] = this.grid[4][1][2];
+						this.grid[4][1][2] = tmpE;
+						tmpC = this.grid[1][0][0]; tmpE = this.grid[1][0][1];
+						this.grid[1][0][0] = this.grid[2][0][0];
+						this.grid[2][0][0] = this.grid[3][0][0];
+						this.grid[3][0][0] = this.grid[4][0][0];
+						this.grid[4][0][0] = tmpC;
+						tmpC = this.grid[1][0][2];
+						this.grid[1][0][2] = this.grid[2][0][2];
+						this.grid[2][0][2] = this.grid[3][0][2];
+						this.grid[3][0][2] = this.grid[4][0][2];
+						this.grid[4][0][2] = tmpC;
+						this.grid[1][0][1] = this.grid[2][0][1];
+						this.grid[2][0][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = this.grid[4][0][1];
+						this.grid[4][0][1] = tmpE;
+						tmpE = this.grid[1][1][0]; tmpC = this.grid[1][1][1];
+						this.grid[1][1][0] = this.grid[2][1][0];
+						this.grid[2][1][0] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[4][1][0];
+						this.grid[4][1][0] = tmpE;
+						this.grid[1][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = tmpC;
+						tmpE = this.grid[1][1][2];
+						this.grid[1][1][2] = this.grid[2][1][2];
+						this.grid[2][1][2] = this.grid[3][1][2];
+						this.grid[3][1][2] = this.grid[4][1][2];
+						this.grid[4][1][2] = tmpE;
+					break;
+					case "f":
+						var tmpC = this.grid[5][0][0], tmpE = this.grid[5][0][1];
+						this.grid[1] = this.grid[1].rot(90);
+						this.grid[5][0][0] = this.grid[2][2][0];
+						this.grid[2][2][0] = this.grid[0][2][2];
+						this.grid[0][2][2] = this.grid[4][0][2];
+						this.grid[4][0][2] = tmpC;
+						tmpC = this.grid[5][0][2];
+						this.grid[5][0][2] = this.grid[2][0][0];
+						this.grid[2][0][0] = this.grid[0][2][0];
+						this.grid[0][2][0] = this.grid[4][2][2];
+						this.grid[4][2][2] = tmpC;
+						this.grid[5][0][1] = this.grid[2][1][0];
+						this.grid[2][1][0] = this.grid[0][2][1];
+						this.grid[0][2][1] = this.grid[4][1][2];
+						this.grid[4][1][2] = tmpE;
+						tmpE = this.grid[0][1][0]; tmpC = this.grid[0][1][1];
+						this.grid[0][1][0] = this.grid[4][2][1];
+						this.grid[4][2][1] = this.grid[5][1][2];
+						this.grid[5][1][2] = this.grid[2][0][1];
+						this.grid[2][0][1] = tmpE;
+						this.grid[0][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = tmpC;
+						tmpE = this.grid[0][1][2];
+						this.grid[0][1][2] = this.grid[4][0][1];
+						this.grid[4][0][1] = this.grid[5][1][0];
+						this.grid[5][1][0] = this.grid[2][2][1];
+						this.grid[2][2][1] = tmpE;
+					break;
+					case "f'":
+						var tmpC = this.grid[5][0][0], tmpE = this.grid[5][0][1];
+						this.grid[1] = this.grid[1].rot(-90);
+						this.grid[5][0][0] = this.grid[4][0][2];
+						this.grid[4][0][2] = this.grid[0][2][2];
+						this.grid[0][2][2] = this.grid[2][2][0];
+						this.grid[2][2][0] = tmpC;
+						tmpC = this.grid[5][0][2];
+						this.grid[5][0][2] = this.grid[4][2][2];
+						this.grid[4][2][2] = this.grid[0][2][0];
+						this.grid[0][2][0] = this.grid[2][0][0];
+						this.grid[2][0][0] = tmpC;
+						this.grid[5][0][1] = this.grid[4][1][2];
+						this.grid[4][1][2] = this.grid[0][2][1];
+						this.grid[0][2][1] = this.grid[2][1][0];
+						this.grid[2][1][0] = tmpE;
+						tmpE = this.grid[0][1][0]; tmpC = this.grid[0][1][1];
+						this.grid[0][1][0] = this.grid[2][0][1];
+						this.grid[2][0][1] = this.grid[5][1][2];
+						this.grid[5][1][2] = this.grid[4][2][1];
+						this.grid[4][2][1] = tmpE;
+						this.grid[0][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = tmpCe;
+						tmpE = this.grid[0][1][2];
+						this.grid[0][1][2] = this.grid[2][2][1];
+						this.grid[2][2][1] = this.grid[5][1][0];
+						this.grid[5][1][0] = this.grid[4][0][1];
+						this.grid[4][0][1] = tmpE;
+					break;
+					case "f2":
+						var tmpC = this.grid[5][0][0], tmpE = this.grid[5][0][1];
+						this.grid[1] = this.grid[1].rot(180);
+						this.grid[5][0][0] = this.grid[2][2][0];
+						this.grid[2][2][0] = this.grid[0][2][2];
+						this.grid[0][2][2] = this.grid[4][0][2];
+						this.grid[4][0][2] = tmpC;
+						tmpC = this.grid[5][0][2];
+						this.grid[5][0][2] = this.grid[2][0][0];
+						this.grid[2][0][0] = this.grid[0][2][0];
+						this.grid[0][2][0] = this.grid[4][2][2];
+						this.grid[4][2][2] = tmpC;
+						this.grid[5][0][1] = this.grid[2][1][0];
+						this.grid[2][1][0] = this.grid[0][2][1];
+						this.grid[0][2][1] = this.grid[4][1][2];
+						this.grid[4][1][2] = tmpE;
+						tmpE = this.grid[0][1][0]; tmpC = this.grid[0][1][1];
+						this.grid[0][1][0] = this.grid[4][2][1];
+						this.grid[4][2][1] = this.grid[5][1][2];
+						this.grid[5][1][2] = this.grid[2][0][1];
+						this.grid[2][0][1] = tmpE;
+						this.grid[0][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = tmpC;
+						tmpE = this.grid[0][1][2];
+						this.grid[0][1][2] = this.grid[4][0][1];
+						this.grid[4][0][1] = this.grid[5][1][0];
+						this.grid[5][1][0] = this.grid[2][2][1];
+						this.grid[2][2][1] = tmpE;
+						tmpC = this.grid[5][0][0]; tmpE = this.grid[5][0][1];
+						this.grid[5][0][0] = this.grid[2][2][0];
+						this.grid[2][2][0] = this.grid[0][2][2];
+						this.grid[0][2][2] = this.grid[4][0][2];
+						this.grid[4][0][2] = tmpC;
+						tmpC = this.grid[5][0][2];
+						this.grid[5][0][2] = this.grid[2][0][0];
+						this.grid[2][0][0] = this.grid[0][2][0];
+						this.grid[0][2][0] = this.grid[4][2][2];
+						this.grid[4][2][2] = tmpC;
+						this.grid[5][0][1] = this.grid[2][1][0];
+						this.grid[2][1][0] = this.grid[0][2][1];
+						this.grid[0][2][1] = this.grid[4][1][2];
+						this.grid[4][1][2] = tmpE;
+						tmpE = this.grid[0][1][0]; tmpC = this.grid[0][1][1];
+						this.grid[0][1][0] = this.grid[4][2][1];
+						this.grid[4][2][1] = this.grid[5][1][2];
+						this.grid[5][1][2] = this.grid[2][0][1];
+						this.grid[2][0][1] = tmpE;
+						this.grid[0][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = tmpC;
+						tmpE = this.grid[0][1][2];
+						this.grid[0][1][2] = this.grid[4][0][1];
+						this.grid[4][0][1] = this.grid[5][1][0];
+						this.grid[5][1][0] = this.grid[2][2][1];
+						this.grid[2][2][1] = tmpE;
+					break;
+					case "r":
+						var tmpC = this.grid[5][0][2], tmpE = this.grid[5][1][2];
+						this.grid[2] = this.grid[2].rot(90);
+						this.grid[5][0][2] = this.grid[3][2][0];
+						this.grid[3][2][0] = this.grid[0][0][2];
+						this.grid[0][0][2] = this.grid[1][0][2];
+						this.grid[1][0][2] = tmpC;
+						tmpC = this.grid[5][2][2];
+						this.grid[5][2][2] = this.grid[3][0][0];
+						this.grid[3][0][0] = this.grid[0][2][2];
+						this.grid[0][2][2] = this.grid[1][2][2];
+						this.grid[1][2][2] = tmpC;
+						this.grid[5][1][2] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[0][1][2];
+						this.grid[0][1][2] = this.grid[1][1][2];
+						this.grid[1][1][2] = tmpE;
+						tmpE = this.grid[0][2][1]; tmpC = this.grid[0][1][1];
+						this.grid[0][2][1] = this.grid[1][2][1];
+						this.grid[1][2][1] = this.grid[5][2][1];
+						this.grid[5][2][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = tmpE;
+						this.grid[0][1][1] = this.grid[1][1][1];
+						this.grid[1][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = tmpC;
+						tmpE = this.grid[0][0][1];
+						this.grid[0][0][1] = this.grid[1][0][1];
+						this.grid[1][0][1] = this.grid[5][0][1];
+						this.grid[5][0][1] = this.grid[3][2][1];
+						this.grid[3][2][1] = tmpE;
+					break;
+					case "r'":
+						var tmpC = this.grid[5][0][2], tmpE = this.grid[5][1][2];
+						this.grid[2] = this.grid[2].rot(-90);
+						this.grid[5][0][2] = this.grid[1][0][2];
+						this.grid[1][0][2] = this.grid[0][0][2];
+						this.grid[0][0][2] = this.grid[3][2][0];
+						this.grid[3][2][0] = tmpC;
+						tmpC = this.grid[5][2][2];
+						this.grid[5][2][2] = this.grid[1][2][2];
+						this.grid[1][2][2] = this.grid[0][2][2];
+						this.grid[0][2][2] = this.grid[3][0][0];
+						this.grid[3][0][0] = tmpC;
+						this.grid[5][1][2] = this.grid[1][1][2];
+						this.grid[1][1][2] = this.grid[0][1][2];
+						this.grid[0][1][2] = this.grid[3][1][0];
+						this.grid[3][1][0] = tmpE;
+						tmpE = this.grid[0][2][1]; tmpC = this.grid[0][1][1];
+						this.grid[0][2][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = this.grid[5][2][1];
+						this.grid[5][2][1] = this.grid[1][2][1];
+						this.grid[1][2][1] = tmpE;
+						this.grid[0][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[1][1][1];
+						this.grid[1][1][1] = tmpC;
+						tmpE = this.grid[0][0][1];
+						this.grid[0][0][1] = this.grid[3][2][1];
+						this.grid[3][2][1] = this.grid[5][0][1];
+						this.grid[5][0][1] = this.grid[1][0][1];
+						this.grid[1][0][1] = tmpE;
+					break;
+					case "r2":
+						var tmpC = this.grid[5][0][2], tmpE = this.grid[5][1][2];
+						this.grid[2] = this.grid[2].rot(180);
+						this.grid[5][0][2] = this.grid[3][2][0];
+						this.grid[3][2][0] = this.grid[0][0][2];
+						this.grid[0][0][2] = this.grid[1][0][2];
+						this.grid[1][0][2] = tmpC;
+						tmpC = this.grid[5][2][2];
+						this.grid[5][2][2] = this.grid[3][0][0];
+						this.grid[3][0][0] = this.grid[0][2][2];
+						this.grid[0][2][2] = this.grid[1][2][2];
+						this.grid[1][2][2] = tmpC;
+						this.grid[5][1][2] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[0][1][2];
+						this.grid[0][1][2] = this.grid[1][1][2];
+						this.grid[1][1][2] = tmpE;
+						tmpE = this.grid[0][2][1]; tmpC = this.grid[0][1][1];
+						this.grid[0][2][1] = this.grid[1][2][1];
+						this.grid[1][2][1] = this.grid[5][2][1];
+						this.grid[5][2][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = tmpE;
+						this.grid[0][1][1] = this.grid[1][1][1];
+						this.grid[1][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = tmpC;
+						tmpE = this.grid[0][0][1];
+						this.grid[0][0][1] = this.grid[1][0][1];
+						this.grid[1][0][1] = this.grid[5][0][1];
+						this.grid[5][0][1] = this.grid[3][2][1];
+						this.grid[3][2][1] = tmpE;
+						tmpC = this.grid[5][0][2]; tmpE = this.grid[5][1][2];
+						this.grid[5][0][2] = this.grid[3][2][0];
+						this.grid[3][2][0] = this.grid[0][0][2];
+						this.grid[0][0][2] = this.grid[1][0][2];
+						this.grid[1][0][2] = tmpC;
+						tmpC = this.grid[5][2][2];
+						this.grid[5][2][2] = this.grid[3][0][0];
+						this.grid[3][0][0] = this.grid[0][2][2];
+						this.grid[0][2][2] = this.grid[1][2][2];
+						this.grid[1][2][2] = tmpC;
+						this.grid[5][1][2] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[0][1][2];
+						this.grid[0][1][2] = this.grid[1][1][2];
+						this.grid[1][1][2] = tmpE;
+						tmpE = this.grid[0][2][1]; tmpC = this.grid[0][1][1];
+						this.grid[0][2][1] = this.grid[1][2][1];
+						this.grid[1][2][1] = this.grid[5][2][1];
+						this.grid[5][2][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = tmpE;
+						this.grid[0][1][1] = this.grid[1][1][1];
+						this.grid[1][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = tmpC;
+						tmpE = this.grid[0][0][1];
+						this.grid[0][0][1] = this.grid[1][0][1];
+						this.grid[1][0][1] = this.grid[5][0][1];
+						this.grid[5][0][1] = this.grid[3][2][1];
+						this.grid[3][2][1] = tmpE;
+					break;
+					case "b":
+						var tmpC = this.grid[0][0][0], tmpE = this.grid[0][0][1];
+						this.grid[3] = this.grid[3].rot(90);
+						this.grid[0][0][0] = this.grid[2][0][2];
+						this.grid[2][0][2] = this.grid[5][2][2];
+						this.grid[5][2][2] = this.grid[4][2][0];
+						this.grid[4][2][0] = tmpC;
+						tmpC = this.grid[0][0][2];
+						this.grid[0][0][2] = this.grid[2][2][2];
+						this.grid[2][2][2] = this.grid[5][2][0];
+						this.grid[5][2][0] = this.grid[4][0][0];
+						this.grid[4][0][0] = tmpC;
+						this.grid[0][0][1] = this.grid[2][1][2];
+						this.grid[2][1][2] = this.grid[5][2][1];
+						this.grid[5][2][1] = this.grid[4][1][0];
+						this.grid[4][1][0] = tmpE;
+						tmpE = this.grid[0][1][0]; tmpC = this.grid[0][1][1];
+						this.grid[0][1][0] = this.grid[2][0][1];
+						this.grid[2][0][1] = this.grid[5][1][2];
+						this.grid[5][1][2] = this.grid[4][2][1];
+						this.grid[4][2][1] = tmpE;
+						this.grid[0][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = tmpC;
+						tmpE = this.grid[0][1][2];
+						this.grid[0][1][2] = this.grid[2][2][1];
+						this.grid[2][2][1] = this.grid[5][1][0];
+						this.grid[5][1][0] = this.grid[4][0][1];
+						this.grid[4][0][1] = tmpE;
+					break;
+					case "b'":
+						var tmpC = this.grid[0][0][0], tmpE = this.grid[0][0][1];
+						this.grid[3] = this.grid[3].rot(-90);
+						this.grid[0][0][0] = this.grid[4][2][0];
+						this.grid[4][2][0] = this.grid[5][2][2];
+						this.grid[5][2][2] = this.grid[2][0][2];
+						this.grid[2][0][2] = tmpC;
+						tmpC = this.grid[0][0][2];
+						this.grid[0][0][2] = this.grid[4][0][0];
+						this.grid[4][0][0] = this.grid[5][2][0];
+						this.grid[5][2][0] = this.grid[2][2][2];
+						this.grid[2][2][2] = tmpC;
+						this.grid[4][1][2] = this.grid[5][2][1];
+						this.grid[0][0][1] = this.grid[4][1][0];
+						this.grid[5][2][1] = this.grid[2][1][2];
+						this.grid[2][1][2] = tmpE;
+						tmpE = this.grid[0][1][0]; tmpC = this.grid[0][1][1];
+						this.grid[0][1][0] = this.grid[4][2][1];
+						this.grid[4][2][1] = this.grid[5][1][2];
+						this.grid[5][1][2] = this.grid[2][0][1];
+						this.grid[2][0][1] = tmpE;
+						this.grid[0][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = tmpC;
+						tmpE = this.grid[0][1][2];
+						this.grid[0][1][2] = this.grid[4][0][1];
+						this.grid[4][0][1] = this.grid[5][1][0];
+						this.grid[5][1][0] = this.grid[2][2][1];
+						this.grid[2][2][1] = tmpE;
+					break;
+					case "b2":
+						var tmpC = this.grid[0][0][0], tmpE = this.grid[0][0][1];
+						this.grid[3] = this.grid[3].rot(180);
+						this.grid[0][0][0] = this.grid[2][0][2];
+						this.grid[2][0][2] = this.grid[5][2][2];
+						this.grid[5][2][2] = this.grid[4][2][0];
+						this.grid[4][2][0] = tmpC;
+						tmpC = this.grid[0][0][2];
+						this.grid[0][0][2] = this.grid[2][2][2];
+						this.grid[2][2][2] = this.grid[5][2][0];
+						this.grid[5][2][0] = this.grid[4][0][0];
+						this.grid[4][0][0] = tmpC;
+						this.grid[0][0][1] = this.grid[2][1][2];
+						this.grid[2][1][2] = this.grid[5][2][1];
+						this.grid[5][2][1] = this.grid[4][1][0];
+						this.grid[4][1][0] = tmpE;
+						tmpE = this.grid[0][1][0]; tmpC = this.grid[0][1][1];
+						this.grid[0][1][0] = this.grid[2][0][1];
+						this.grid[2][0][1] = this.grid[5][1][2];
+						this.grid[5][1][2] = this.grid[4][2][1];
+						this.grid[4][2][1] = tmpE;
+						this.grid[0][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = tmpC;
+						tmpE = this.grid[0][1][2];
+						this.grid[0][1][2] = this.grid[2][2][1];
+						this.grid[2][2][1] = this.grid[5][1][0];
+						this.grid[5][1][0] = this.grid[4][0][1];
+						this.grid[4][0][1] = tmpE;
+						tmpC = this.grid[0][0][0]; tmpE = this.grid[0][0][1];
+						this.grid[0][0][0] = this.grid[2][0][2];
+						this.grid[2][0][2] = this.grid[5][2][2];
+						this.grid[5][2][2] = this.grid[4][2][0];
+						this.grid[4][2][0] = tmpC;
+						tmpC = this.grid[0][0][2];
+						this.grid[0][0][2] = this.grid[2][2][2];
+						this.grid[2][2][2] = this.grid[5][2][0];
+						this.grid[5][2][0] = this.grid[4][0][0];
+						this.grid[4][0][0] = tmpC;
+						this.grid[0][0][1] = this.grid[2][1][2];
+						this.grid[2][1][2] = this.grid[5][2][1];
+						this.grid[5][2][1] = this.grid[4][1][0];
+						this.grid[4][1][0] = tmpE;
+						tmpE = this.grid[0][1][0]; tmpC = this.grid[0][1][1];
+						this.grid[0][1][0] = this.grid[2][0][1];
+						this.grid[2][0][1] = this.grid[5][1][2];
+						this.grid[5][1][2] = this.grid[4][2][1];
+						this.grid[4][2][1] = tmpE;
+						this.grid[0][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = tmpC;
+						tmpE = this.grid[0][1][2];
+						this.grid[0][1][2] = this.grid[2][2][1];
+						this.grid[2][2][1] = this.grid[5][1][0];
+						this.grid[5][1][0] = this.grid[4][0][1];
+						this.grid[4][0][1] = tmpE;
+					break;
+					case "l":
+						var tmpC = this.grid[5][0][0], tmpE = this.grid[5][1][0];
+						this.grid[4] = this.grid[4].rot(90);
+						this.grid[5][0][0] = this.grid[1][0][0];
+						this.grid[1][0][0] = this.grid[0][0][0];
+						this.grid[0][0][0] = this.grid[3][2][2];
+						this.grid[3][2][2] = tmpC;
+						tmpC = this.grid[5][2][0];
+						this.grid[5][2][0] = this.grid[1][2][0];
+						this.grid[1][2][0] = this.grid[0][2][0];
+						this.grid[0][2][0] = this.grid[3][0][2];
+						this.grid[3][0][2] = tmpC;
+						this.grid[5][1][0] = this.grid[1][1][0];
+						this.grid[1][1][0] = this.grid[0][1][0];
+						this.grid[0][1][0] = this.grid[3][1][2];
+						this.grid[3][1][2] = tmpE;
+						tmpE = this.grid[0][2][1]; tmpC = this.grid[0][1][1];
+						this.grid[0][2][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = this.grid[5][2][1];
+						this.grid[5][2][1] = this.grid[1][2][1];
+						this.grid[1][2][1] = tmpE;
+						this.grid[0][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[1][1][1];
+						this.grid[1][1][1] = tmpC;
+						tmpE = this.grid[0][0][1];
+						this.grid[0][0][1] = this.grid[3][2][1];
+						this.grid[3][2][1] = this.grid[5][0][1];
+						this.grid[5][0][1] = this.grid[1][0][1];
+						this.grid[1][0][1] = tmpE;
+					break;
+					case "l'":
+						var tmpC = this.grid[5][0][0], tmpE = this.grid[5][1][0];
+						this.grid[4] = this.grid[4].rot(-90);
+						this.grid[5][0][0] = this.grid[3][2][2];
+						this.grid[3][2][2] = this.grid[0][0][0];
+						this.grid[0][0][0] = this.grid[1][0][0];
+						this.grid[1][0][0] = tmpC;
+						tmpC = this.grid[5][2][0];
+						this.grid[5][2][0] = this.grid[3][0][2];
+						this.grid[3][0][2] = this.grid[0][2][0];
+						this.grid[0][2][0] = this.grid[1][2][0];
+						this.grid[1][2][0] = tmpC;
+						this.grid[5][1][0] = this.grid[3][1][2];
+						this.grid[3][1][2] = this.grid[0][1][0];
+						this.grid[0][1][0] = this.grid[1][1][0];
+						this.grid[1][1][0] = tmpE;
+						tmpE = this.grid[0][2][1]; tmpC = this.grid[0][1][1];
+						this.grid[0][2][1] = this.grid[1][2][1];
+						this.grid[1][2][1] = this.grid[5][2][1];
+						this.grid[5][2][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = tmpE;
+						this.grid[0][1][1] = this.grid[1][1][1];
+						this.grid[1][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = tmpC;
+						tmpE = this.grid[0][0][1];
+						this.grid[0][0][1] = this.grid[1][0][1];
+						this.grid[1][0][1] = this.grid[5][0][1];
+						this.grid[5][0][1] = this.grid[3][2][1];
+						this.grid[3][2][1] = tmpE;
+					break;
+					case "l2":
+						var tmpC = this.grid[5][0][0], tmpE = this.grid[5][1][0];
+						this.grid[4] = this.grid[4].rot(180);
+						this.grid[5][0][0] = this.grid[1][0][0];
+						this.grid[1][0][0] = this.grid[0][0][0];
+						this.grid[0][0][0] = this.grid[3][2][2];
+						this.grid[3][2][2] = tmpC;
+						tmpC = this.grid[5][2][0];
+						this.grid[5][2][0] = this.grid[1][2][0];
+						this.grid[1][2][0] = this.grid[0][2][0];
+						this.grid[0][2][0] = this.grid[3][0][2];
+						this.grid[3][0][2] = tmpC;
+						this.grid[5][1][0] = this.grid[1][1][0];
+						this.grid[1][1][0] = this.grid[0][1][0];
+						this.grid[0][1][0] = this.grid[3][1][2];
+						this.grid[3][1][2] = tmpE;
+						tmpE = this.grid[0][2][1]; tmpC = this.grid[0][1][1];
+						this.grid[0][2][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = this.grid[5][2][1];
+						this.grid[5][2][1] = this.grid[1][2][1];
+						this.grid[1][2][1] = tmpE;
+						this.grid[0][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[1][1][1];
+						this.grid[1][1][1] = tmpC;
+						tmpE = this.grid[0][0][1];
+						this.grid[0][0][1] = this.grid[3][2][1];
+						this.grid[3][2][1] = this.grid[5][0][1];
+						this.grid[5][0][1] = this.grid[1][0][1];
+						this.grid[1][0][1] = tmpE;
+						tmpC = this.grid[5][0][0]; tmpE = this.grid[5][1][0];
+						this.grid[5][0][0] = this.grid[1][0][0];
+						this.grid[1][0][0] = this.grid[0][0][0];
+						this.grid[0][0][0] = this.grid[3][2][2];
+						this.grid[3][2][2] = tmpC;
+						tmpC = this.grid[5][2][0];
+						this.grid[5][2][0] = this.grid[1][2][0];
+						this.grid[1][2][0] = this.grid[0][2][0];
+						this.grid[0][2][0] = this.grid[3][0][2];
+						this.grid[3][0][2] = tmpC;
+						this.grid[5][1][0] = this.grid[1][1][0];
+						this.grid[1][1][0] = this.grid[0][1][0];
+						this.grid[0][1][0] = this.grid[3][1][2];
+						this.grid[3][1][2] = tmpE;
+						tmpE = this.grid[0][2][1]; tmpC = this.grid[0][1][1];
+						this.grid[0][2][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = this.grid[5][2][1];
+						this.grid[5][2][1] = this.grid[1][2][1];
+						this.grid[1][2][1] = tmpE;
+						this.grid[0][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[1][1][1];
+						this.grid[1][1][1] = tmpC;
+						tmpE = this.grid[0][0][1];
+						this.grid[0][0][1] = this.grid[3][2][1];
+						this.grid[3][2][1] = this.grid[5][0][1];
+						this.grid[5][0][1] = this.grid[1][0][1];
+						this.grid[1][0][1] = tmpE;
+					break;
+					case "d":
+						var tmpC = this.grid[1][2][2], tmpE = this.grid[1][2][1];
+						this.grid[5] = this.grid[5].rot(90);
+						this.grid[1][2][2] = this.grid[4][2][2];
+						this.grid[4][2][2] = this.grid[3][2][2];
+						this.grid[3][2][2] = this.grid[2][2][2];
+						this.grid[2][2][2] = tmpC;
+						tmpC = this.grid[1][2][0];
+						this.grid[1][2][0] = this.grid[4][2][0];
+						this.grid[4][2][0] = this.grid[3][2][0];
+						this.grid[3][2][0] = this.grid[2][2][0];
+						this.grid[2][2][0] = tmpC;
+						this.grid[1][2][1] = this.grid[4][2][1];
+						this.grid[4][2][1] = this.grid[3][2][1];
+						this.grid[3][2][1] = this.grid[2][2][1];
+						this.grid[2][2][1] = tmpE;
+						tmpE = this.grid[1][1][0]; tmpC = this.grid[1][1][1];
+						this.grid[1][1][0] = this.grid[4][1][0];
+						this.grid[4][1][0] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[2][1][0];
+						this.grid[2][1][0] = tmpE;
+						this.grid[1][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = tmpC;
+						tmpE = this.grid[1][1][2];
+						this.grid[1][1][2] = this.grid[4][1][2];
+						this.grid[4][1][2] = this.grid[3][1][2];
+						this.grid[3][1][2] = this.grid[2][1][2];
+						this.grid[2][1][2] = tmpE;
+					break;
+					case "d'":
+						var tmpC = this.grid[1][2][2], tmpE = this.grid[1][2][1];
+						this.grid[5] = this.grid[5].rot(-90);
+						this.grid[1][2][2] = this.grid[2][2][2];
+						this.grid[2][2][2] = this.grid[3][2][2];
+						this.grid[3][2][2] = this.grid[4][2][2];
+						this.grid[4][2][2] = tmpC;
+						tmpC = this.grid[1][2][0];
+						this.grid[1][2][0] = this.grid[2][2][0];
+						this.grid[2][2][0] = this.grid[3][2][0];
+						this.grid[3][2][0] = this.grid[4][2][0];
+						this.grid[4][2][0] = tmpC;
+						this.grid[1][2][1] = this.grid[2][2][1];
+						this.grid[2][2][1] = this.grid[3][2][1];
+						this.grid[3][2][1] = this.grid[4][2][1];
+						this.grid[4][2][1] = tmpE;
+						tmpE = this.grid[1][1][0]; tmpC = this.grid[1][1][1];
+						this.grid[1][1][0] = this.grid[2][1][0];
+						this.grid[2][1][0] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[4][1][0];
+						this.grid[4][1][0] = tmpE;
+						this.grid[1][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = tmpCe;
+						tmpE = this.grid[1][1][2];
+						this.grid[1][1][2] = this.grid[2][1][2];
+						this.grid[2][1][2] = this.grid[3][1][2];
+						this.grid[3][1][2] = this.grid[4][1][2];
+						this.grid[4][1][2] = tmpE;
+					break;
+					case "d2":
+						var tmpC = this.grid[1][2][2], tmpE = this.grid[1][2][1];
+						this.grid[5] = this.grid[5].rot(90);
+						this.grid[1][2][2] = this.grid[4][2][2];
+						this.grid[4][2][2] = this.grid[3][2][2];
+						this.grid[3][2][2] = this.grid[2][2][2];
+						this.grid[2][2][2] = tmpC;
+						tmpC = this.grid[1][2][0];
+						this.grid[1][2][0] = this.grid[4][2][0];
+						this.grid[4][2][0] = this.grid[3][2][0];
+						this.grid[3][2][0] = this.grid[2][2][0];
+						this.grid[2][2][0] = tmpC;
+						this.grid[1][2][1] = this.grid[4][2][1];
+						this.grid[4][2][1] = this.grid[3][2][1];
+						this.grid[3][2][1] = this.grid[2][2][1];
+						this.grid[2][2][1] = tmpE;
+						tmpE = this.grid[1][1][0]; tmpC = this.grid[1][1][1];
+						this.grid[1][1][0] = this.grid[4][1][0];
+						this.grid[4][1][0] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[2][1][0];
+						this.grid[2][1][0] = tmpE;
+						this.grid[1][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = tmpC;
+						tmpE = this.grid[1][1][2];
+						this.grid[1][1][2] = this.grid[4][1][2];
+						this.grid[4][1][2] = this.grid[3][1][2];
+						this.grid[3][1][2] = this.grid[2][1][2];
+						this.grid[2][1][2] = tmpE;
+						tmpC = this.grid[1][2][2]; tmpE = this.grid[1][2][1];
+						this.grid[5] = this.grid[5].rot(90);
+						this.grid[1][2][2] = this.grid[4][2][2];
+						this.grid[4][2][2] = this.grid[3][2][2];
+						this.grid[3][2][2] = this.grid[2][2][2];
+						this.grid[2][2][2] = tmpC;
+						tmpC = this.grid[1][2][0];
+						this.grid[1][2][0] = this.grid[4][2][0];
+						this.grid[4][2][0] = this.grid[3][2][0];
+						this.grid[3][2][0] = this.grid[2][2][0];
+						this.grid[2][2][0] = tmpC;
+						this.grid[1][2][1] = this.grid[4][2][1];
+						this.grid[4][2][1] = this.grid[3][2][1];
+						this.grid[3][2][1] = this.grid[2][2][1];
+						this.grid[2][2][1] = tmpE;
+						tmpE = this.grid[1][1][0]; tmpC = this.grid[1][1][1];
+						this.grid[1][1][0] = this.grid[4][1][0];
+						this.grid[4][1][0] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[2][1][0];
+						this.grid[2][1][0] = tmpE;
+						this.grid[1][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = tmpC;
+						tmpE = this.grid[1][1][2];
+						this.grid[1][1][2] = this.grid[4][1][2];
+						this.grid[4][1][2] = this.grid[3][1][2];
+						this.grid[3][1][2] = this.grid[2][1][2];
+						this.grid[2][1][2] = tmpE;
+					break;
+					case "E":
+						var tmpE = this.grid[1][1][0], tmpCe = this.grid[1][1][1];
+						this.grid[1][1][0] = this.grid[4][1][0];
+						this.grid[4][1][0] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[2][1][0];
+						this.grid[2][1][0] = tmpE;
+						this.grid[1][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = tmpCe;
+						tmpE = this.grid[1][1][2];
+						this.grid[1][1][2] = this.grid[4][1][2];
+						this.grid[4][1][2] = this.grid[3][1][2];
+						this.grid[3][1][2] = this.grid[2][1][2];
+						this.grid[2][1][2] = tmpE;
+					break;
+					case "E'":
+						var tmpE = this.grid[1][1][0], tmpCe = this.grid[1][1][1];
+						this.grid[1][1][0] = this.grid[2][1][0];
+						this.grid[2][1][0] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[4][1][0];
+						this.grid[4][1][0] = tmpE;
+						this.grid[1][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = tmpCe;
+						tmpE = this.grid[1][1][2];
+						this.grid[1][1][2] = this.grid[2][1][2];
+						this.grid[2][1][2] = this.grid[3][1][2];
+						this.grid[3][1][2] = this.grid[4][1][2];
+						this.grid[4][1][2] = tmpE;
+					break;
+					case "E2":
+						var tmpE = this.grid[1][1][0], tmpCe = this.grid[1][1][1];
+						this.grid[1][1][0] = this.grid[4][1][0];
+						this.grid[4][1][0] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[2][1][0];
+						this.grid[2][1][0] = tmpE;
+						this.grid[1][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = tmpCe;
+						tmpE = this.grid[1][1][2];
+						this.grid[1][1][2] = this.grid[4][1][2];
+						this.grid[4][1][2] = this.grid[3][1][2];
+						this.grid[3][1][2] = this.grid[2][1][2];
+						this.grid[2][1][2] = tmpE;
+						tmpE = this.grid[1][1][0]; tmpCe = this.grid[1][1][1];
+						this.grid[1][1][0] = this.grid[4][1][0];
+						this.grid[4][1][0] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[2][1][0];
+						this.grid[2][1][0] = tmpE;
+						this.grid[1][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = tmpCe;
+						tmpE = this.grid[1][1][2];
+						this.grid[1][1][2] = this.grid[4][1][2];
+						this.grid[4][1][2] = this.grid[3][1][2];
+						this.grid[3][1][2] = this.grid[2][1][2];
+						this.grid[2][1][2] = tmpE;
+					break;
+					case "S":
+						var tmpE = this.grid[0][1][0], tmpCe = this.grid[0][1][1];
+						this.grid[0][1][0] = this.grid[4][2][1];
+						this.grid[4][2][1] = this.grid[5][1][2];
+						this.grid[5][1][2] = this.grid[2][0][1];
+						this.grid[2][0][1] = tmpE;
+						this.grid[0][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = tmpCe;
+						tmpE = this.grid[0][1][2];
+						this.grid[0][1][2] = this.grid[4][0][1];
+						this.grid[4][0][1] = this.grid[5][1][0];
+						this.grid[5][1][0] = this.grid[2][2][1];
+						this.grid[2][2][1] = tmpE;
+					break;
+					case "S'":
+						var tmpE = this.grid[0][1][0], tmpCe = this.grid[0][1][1];
+						this.grid[0][1][0] = this.grid[2][0][1];
+						this.grid[2][0][1] = this.grid[5][1][2];
+						this.grid[5][1][2] = this.grid[4][2][1];
+						this.grid[4][2][1] = tmpE;
+						this.grid[0][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = tmpCe;
+						tmpE = this.grid[0][1][2];
+						this.grid[0][1][2] = this.grid[2][2][1];
+						this.grid[2][2][1] = this.grid[5][1][0];
+						this.grid[5][1][0] = this.grid[4][0][1];
+						this.grid[4][0][1] = tmpE;
+					break;
+					case "S2":
+						var tmpE = this.grid[0][1][0], tmpCe = this.grid[0][1][1];
+						this.grid[0][1][0] = this.grid[4][2][1];
+						this.grid[4][2][1] = this.grid[5][1][2];
+						this.grid[5][1][2] = this.grid[2][0][1];
+						this.grid[2][0][1] = tmpE;
+						this.grid[0][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = tmpCe;
+						tmpE = this.grid[0][1][2];
+						this.grid[0][1][2] = this.grid[4][0][1];
+						this.grid[4][0][1] = this.grid[5][1][0];
+						this.grid[5][1][0] = this.grid[2][2][1];
+						this.grid[2][2][1] = tmpE;
+						tmpE = this.grid[0][1][0]; tmpCe = this.grid[0][1][1];
+						this.grid[0][1][0] = this.grid[4][2][1];
+						this.grid[4][2][1] = this.grid[5][1][2];
+						this.grid[5][1][2] = this.grid[2][0][1];
+						this.grid[2][0][1] = tmpE;
+						this.grid[0][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = tmpCe;
+						tmpE = this.grid[0][1][2];
+						this.grid[0][1][2] = this.grid[4][0][1];
+						this.grid[4][0][1] = this.grid[5][1][0];
+						this.grid[5][1][0] = this.grid[2][2][1];
+						this.grid[2][2][1] = tmpE;
+					break;
+					case "M":
+						var tmpE = this.grid[0][2][1], tmpCe = this.grid[0][1][1];
+						this.grid[0][2][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = this.grid[5][2][1];
+						this.grid[5][2][1] = this.grid[1][2][1];
+						this.grid[1][2][1] = tmpE;
+						this.grid[0][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[1][1][1];
+						this.grid[1][1][1] = tmpCe;
+						tmpE = this.grid[0][0][1];
+						this.grid[0][0][1] = this.grid[3][2][1];
+						this.grid[3][2][1] = this.grid[5][0][1];
+						this.grid[5][0][1] = this.grid[1][0][1];
+						this.grid[1][0][1] = tmpE;
+					break;
+					case "M'":
+						var tmpE = this.grid[0][2][1], tmpCe = this.grid[0][1][1];
+						this.grid[0][2][1] = this.grid[1][2][1];
+						this.grid[1][2][1] = this.grid[5][2][1];
+						this.grid[5][2][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = tmpE;
+						this.grid[0][1][1] = this.grid[1][1][1];
+						this.grid[1][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = tmpCe;
+						tmpE = this.grid[0][0][1];
+						this.grid[0][0][1] = this.grid[1][0][1];
+						this.grid[1][0][1] = this.grid[5][0][1];
+						this.grid[5][0][1] = this.grid[3][2][1];
+						this.grid[3][2][1] = tmpE;
+					break;
+					case "M2":
+						var tmpE = this.grid[0][2][1], tmpCe = this.grid[0][1][1];
+						this.grid[0][2][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = this.grid[5][2][1];
+						this.grid[5][2][1] = this.grid[1][2][1];
+						this.grid[1][2][1] = tmpE;
+						this.grid[0][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[1][1][1];
+						this.grid[1][1][1] = tmpCe;
+						tmpE = this.grid[0][0][1];
+						this.grid[0][0][1] = this.grid[3][2][1];
+						this.grid[3][2][1] = this.grid[5][0][1];
+						this.grid[5][0][1] = this.grid[1][0][1];
+						this.grid[1][0][1] = tmpE;
+						tmpE = this.grid[0][2][1]; tmpCe = this.grid[0][1][1];
+						this.grid[0][2][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = this.grid[5][2][1];
+						this.grid[5][2][1] = this.grid[1][2][1];
+						this.grid[1][2][1] = tmpE;
+						this.grid[0][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[1][1][1];
+						this.grid[1][1][1] = tmpCe;
+						tmpE = this.grid[0][0][1];
+						this.grid[0][0][1] = this.grid[3][2][1];
+						this.grid[3][2][1] = this.grid[5][0][1];
+						this.grid[5][0][1] = this.grid[1][0][1];
+						this.grid[1][0][1] = tmpE;
+					break;
+					case "y":
+						this.rotY();
+					break;
+					case "y'":
+						this.rotYi();
+					break;
+					case "y2":
+						this.rotY2();
+					break;
+					case "z":
+						this.rotZ();
+					break;
+					case "z'":
+						this.rotZi();
+					break;
+					case "z2":
+						this.rotZ2();
+					break;
+					case "x":
+						this.rotX();
+					break;
+					case "x'":
+						this.rotXi();
+					break;
+					case "x2":
+						this.rotX2();
+					break;
+					case "S^"://Sexy
+						this.perform("R U R' U'");
+					break;
+					case "S^'"://Reverse sexy
+						this.perform("U R U' R'");
+					break;
+					case "H^'"://Sledge
+						this.perform("R' F R F'");
+					break;
+					case "H^"://Hedge
+						this.perform("F R' F' R");
+					break;
+					case "W^'"://Wedge
+						this.perform("R' U R U'");
+					break;
+					case "W^"://Wedge
+						this.perform("U R' U' R");
+					break;
+					case "O"://2 U adj & 2 D opp orientation
+						this.perform("M' U M' U M' U M' U");
+						m = ["M'", "U", "M'", "U", "M'", "U", "M'", "U"];
+					break;
+					case "Oa"://12 Egdes orientation
+						this.perform("F U R D B L' F");//or F U R D B L' F'
+						m = ["F", "U", "R", "D", "B", "L'", "F"];
+					break;
+					case "O4"://4 U Egdes orientation
+						this.perform("M' U M' U M' U M' U' M' U M' U M' U M' U'");
+						m = ["M'", "U", "M'", "U", "M'", "U", "M'", "U'", "M'", "U", "M'", "U", "M'", "U", "M'", "U'"];
+					break;
+					case "O2"://2 U Egdes orientation
+						this.perform("M' U M' U M' U M' U2 M' U M' U M' U M'");
+						m = ["M'", "U", "M'", "U", "M'", "U", "M'", "U2", "M'", "U", "M'", "U", "M'", "U", "M'"];
+					break;
+					default: Essence.say("Unknow move: "+m, "error");break;
+				}
+			}else if(this.format=="2x2x2"){
+				switch(m){
+					case "U":
+						var tmpC = this.grid[1][0][0];
+						this.grid[0] = this.grid[0].rot(90);
+						this.grid[1][0][0] = this.grid[2][0][0];
+						this.grid[2][0][0] = this.grid[3][0][0];
+						this.grid[3][0][0] = this.grid[4][0][0];
+						this.grid[4][0][0] = tmpC;
+						tmpC = this.grid[1][0][1];
+						this.grid[1][0][1] = this.grid[2][0][1];
+						this.grid[2][0][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = this.grid[4][0][1];
+						this.grid[4][0][1] = tmpC;
+					break;
+					case "U'":
+						var tmpC = this.grid[1][0][0];
+						this.grid[0] = this.grid[0].rot(-90);
+						this.grid[1][0][0] = this.grid[4][0][0];
+						this.grid[4][0][0] = this.grid[3][0][0];
+						this.grid[3][0][0] = this.grid[2][0][0];
+						this.grid[2][0][0] = tmpC;
+						tmpC = this.grid[1][0][1];
+						this.grid[1][0][1] = this.grid[4][0][1];
+						this.grid[4][0][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = this.grid[2][0][1];
+						this.grid[2][0][1] = tmpC;
+					break;
+					case "U2":
+						var tmpC = this.grid[1][0][0];
+						this.grid[0] = this.grid[0].rot(180);
+						this.grid[1][0][0] = this.grid[2][0][0];
+						this.grid[2][0][0] = this.grid[3][0][0];
+						this.grid[3][0][0] = this.grid[4][0][0];
+						this.grid[4][0][0] = tmpC;
+						tmpC = this.grid[1][0][1];
+						this.grid[1][0][1] = this.grid[2][0][1];
+						this.grid[2][0][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = this.grid[4][0][1];
+						this.grid[4][0][1] = tmpC;
+						tmpC = this.grid[1][0][0];
+						this.grid[1][0][0] = this.grid[2][0][0];
+						this.grid[2][0][0] = this.grid[3][0][0];
+						this.grid[3][0][0] = this.grid[4][0][0];
+						this.grid[4][0][0] = tmpC;
+						tmpC = this.grid[1][0][1];
+						this.grid[1][0][1] = this.grid[2][0][1];
+						this.grid[2][0][1] = this.grid[3][0][1];
+						this.grid[3][0][1] = this.grid[4][0][1];
+						this.grid[4][0][1] = tmpC;
+					break;
+					case "F":
+						var tmpC = this.grid[5][0][0];
+						this.grid[1] = this.grid[1].rot(90);
+						this.grid[5][0][0] = this.grid[2][1][0];
+						this.grid[2][1][0] = this.grid[0][1][1];
+						this.grid[0][1][1] = this.grid[4][0][1];
+						this.grid[4][0][1] = tmpC;
+						tmpC = this.grid[5][0][1];
+						this.grid[5][0][1] = this.grid[2][0][0];
+						this.grid[2][0][0] = this.grid[0][1][0];
+						this.grid[0][1][0] = this.grid[4][1][1];
+						this.grid[4][1][1] = tmpC;
+					break;
+					case "F'":
+						var tmpC = this.grid[5][0][0];
+						this.grid[1] = this.grid[1].rot(-90);
+						this.grid[5][0][0] = this.grid[4][0][1];
+						this.grid[4][0][1] = this.grid[0][1][1];
+						this.grid[0][1][1] = this.grid[2][1][0];
+						this.grid[2][1][0] = tmpC;
+						tmpC = this.grid[5][0][1];
+						this.grid[5][0][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = this.grid[0][1][0];
+						this.grid[0][1][0] = this.grid[2][0][0];
+						this.grid[2][0][0] = tmpC;
+					break;
+					case "F2":
+						var tmpC = this.grid[5][0][0];
+						this.grid[1] = this.grid[1].rot(180);
+						this.grid[5][0][0] = this.grid[2][1][0];
+						this.grid[2][1][0] = this.grid[0][1][1];
+						this.grid[0][1][1] = this.grid[4][0][1];
+						this.grid[4][0][1] = tmpC;
+						tmpC = this.grid[5][0][1];
+						this.grid[5][0][1] = this.grid[2][0][0];
+						this.grid[2][0][0] = this.grid[0][1][0];
+						this.grid[0][1][0] = this.grid[4][1][1];
+						this.grid[4][1][1] = tmpC;
+						tmpC = this.grid[5][0][0];
+						this.grid[5][0][0] = this.grid[2][1][0];
+						this.grid[2][1][0] = this.grid[0][1][1];
+						this.grid[0][1][1] = this.grid[4][0][1];
+						this.grid[4][0][1] = tmpC;
+						tmpC = this.grid[5][0][1];
+						this.grid[5][0][1] = this.grid[2][0][0];
+						this.grid[2][0][0] = this.grid[0][1][0];
+						this.grid[0][1][0] = this.grid[4][1][1];
+						this.grid[4][1][1] = tmpC;
+					break;
+					case "R":
+						var tmpC = this.grid[5][0][1];
+						this.grid[2] = this.grid[2].rot(90);
+						this.grid[5][0][1] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[0][0][1];
+						this.grid[0][0][1] = this.grid[1][0][1];
+						this.grid[1][0][1] = tmpC;
+						tmpC = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[3][0][0];
+						this.grid[3][0][0] = this.grid[0][1][1];
+						this.grid[0][1][1] = this.grid[1][1][1];
+						this.grid[1][1][1] = tmpC;
+					break;
+					case "R'":
+						var tmpC = this.grid[5][0][1];
+						this.grid[2] = this.grid[2].rot(-90);
+						this.grid[5][0][1] = this.grid[1][0][1];
+						this.grid[1][0][1] = this.grid[0][0][1];
+						this.grid[0][0][1] = this.grid[3][1][0];
+						this.grid[3][1][0] = tmpC;
+						tmpC = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[1][1][1];
+						this.grid[1][1][1] = this.grid[0][1][1];
+						this.grid[0][1][1] = this.grid[3][0][0];
+						this.grid[3][0][0] = tmpC;
+					break;
+					case "R2":
+						var tmpC = this.grid[5][0][1];
+						this.grid[2] = this.grid[2].rot(180);
+						this.grid[5][0][1] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[0][0][1];
+						this.grid[0][0][1] = this.grid[1][0][1];
+						this.grid[1][0][1] = tmpC;
+						tmpC = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[3][0][0];
+						this.grid[3][0][0] = this.grid[0][1][1];
+						this.grid[0][1][1] = this.grid[1][1][1];
+						this.grid[1][1][1] = tmpC;
+						tmpC = this.grid[5][0][1];
+						this.grid[5][0][1] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[0][0][1];
+						this.grid[0][0][1] = this.grid[1][0][1];
+						this.grid[1][0][1] = tmpC;
+						tmpC = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[3][0][0];
+						this.grid[3][0][0] = this.grid[0][1][1];
+						this.grid[0][1][1] = this.grid[1][1][1];
+						this.grid[1][1][1] = tmpC;
+					break;
+					case "B":
+						var tmpC = this.grid[0][0][0];
+						this.grid[3] = this.grid[3].rot(90);
+						this.grid[0][0][0] = this.grid[2][0][1];
+						this.grid[2][0][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[4][1][0];
+						this.grid[4][1][0] = tmpC;
+						tmpC = this.grid[0][0][1];
+						this.grid[0][0][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = this.grid[5][1][0];
+						this.grid[5][1][0] = this.grid[4][0][0];
+						this.grid[4][0][0] = tmpC;
+					break;
+					case "B'":
+						var tmpC = this.grid[0][0][0];
+						this.grid[3] = this.grid[3].rot(-90);
+						this.grid[0][0][0] = this.grid[4][1][0];
+						this.grid[4][1][0] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[2][0][1];
+						this.grid[2][0][1] = tmpC;
+						tmpC = this.grid[0][0][1];
+						this.grid[0][0][1] = this.grid[4][0][0];
+						this.grid[4][0][0] = this.grid[5][1][0];
+						this.grid[5][1][0] = this.grid[2][1][1];
+						this.grid[2][1][1] = tmpC;
+					break;
+					case "B2":
+						var tmpC = this.grid[0][0][0];
+						this.grid[3] = this.grid[3].rot(180);
+						this.grid[0][0][0] = this.grid[2][0][1];
+						this.grid[2][0][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[4][1][0];
+						this.grid[4][1][0] = tmpC;
+						tmpC = this.grid[0][0][1];
+						this.grid[0][0][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = this.grid[5][1][0];
+						this.grid[5][1][0] = this.grid[4][0][0];
+						this.grid[4][0][0] = tmpC;
+						tmpC = this.grid[0][0][0];
+						this.grid[0][0][0] = this.grid[2][0][1];
+						this.grid[2][0][1] = this.grid[5][1][1];
+						this.grid[5][1][1] = this.grid[4][1][0];
+						this.grid[4][1][0] = tmpC;
+						tmpC = this.grid[0][0][1];
+						this.grid[0][0][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = this.grid[5][1][0];
+						this.grid[5][1][0] = this.grid[4][0][0];
+						this.grid[4][0][0] = tmpC;
+					break;
+					case "L":
+						var tmpC = this.grid[5][0][0];
+						this.grid[4] = this.grid[4].rot(90);
+						this.grid[5][0][0] = this.grid[1][0][0];
+						this.grid[1][0][0] = this.grid[0][0][0];
+						this.grid[0][0][0] = this.grid[3][1][1];
+						this.grid[3][1][1] = tmpC;
+						tmpC = this.grid[5][1][0];
+						this.grid[5][1][0] = this.grid[1][1][0];
+						this.grid[1][1][0] = this.grid[0][1][0];
+						this.grid[0][1][0] = this.grid[3][0][1];
+						this.grid[3][0][1] = tmpC;
+					break;
+					case "L'":
+						var tmpC = this.grid[5][0][0];
+						this.grid[4] = this.grid[4].rot(-90);
+						this.grid[5][0][0] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[0][0][0];
+						this.grid[0][0][0] = this.grid[1][0][0];
+						this.grid[1][0][0] = tmpC;
+						tmpC = this.grid[5][1][0];
+						this.grid[5][1][0] = this.grid[3][0][1];
+						this.grid[3][0][1] = this.grid[0][1][0];
+						this.grid[0][1][0] = this.grid[1][1][0];
+						this.grid[1][1][0] = tmpC;
+					break;
+					case "L2":
+						var tmpC = this.grid[5][0][0];
+						this.grid[4] = this.grid[4].rot(180);
+						this.grid[5][0][0] = this.grid[1][0][0];
+						this.grid[1][0][0] = this.grid[0][0][0];
+						this.grid[0][0][0] = this.grid[3][1][1];
+						this.grid[3][1][1] = tmpC;
+						tmpC = this.grid[5][1][0];
+						this.grid[5][1][0] = this.grid[1][1][0];
+						this.grid[1][1][0] = this.grid[0][1][0];
+						this.grid[0][1][0] = this.grid[3][0][1];
+						this.grid[3][0][1] = tmpC;
+						tmpC = this.grid[5][0][0];
+						this.grid[5][0][0] = this.grid[1][0][0];
+						this.grid[1][0][0] = this.grid[0][0][0];
+						this.grid[0][0][0] = this.grid[3][1][1];
+						this.grid[3][1][1] = tmpC;
+						tmpC = this.grid[5][1][0];
+						this.grid[5][1][0] = this.grid[1][1][0];
+						this.grid[1][1][0] = this.grid[0][1][0];
+						this.grid[0][1][0] = this.grid[3][0][1];
+						this.grid[3][0][1] = tmpC;
+					break;
+					case "D":
+						var tmpC = this.grid[1][1][1];
+						this.grid[5] = this.grid[5].rot(90);
+						this.grid[1][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = tmpC;
+						tmpC = this.grid[1][1][0];
+						this.grid[1][1][0] = this.grid[4][1][0];
+						this.grid[4][1][0] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[2][1][0];
+						this.grid[2][1][0] = tmpC;;
+					break;
+					case "D'":
+						var tmpC = this.grid[1][1][1];
+						this.grid[5] = this.grid[5].rot(-90);
+						this.grid[1][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = tmpC;
+						tmpC = this.grid[1][1][0];
+						this.grid[1][1][0] = this.grid[2][1][0];
+						this.grid[2][1][0] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[4][1][0];
+						this.grid[4][1][0] = tmpC;
+					break;
+					case "D2":
+						var tmpC = this.grid[1][1][1];
+						this.grid[5] = this.grid[5].rot(180);
+						this.grid[1][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = tmpC;
+						tmpC = this.grid[1][1][0];
+						this.grid[1][1][0] = this.grid[4][1][0];
+						this.grid[4][1][0] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[2][1][0];
+						this.grid[2][1][0] = tmpC;
+						tmpC = this.grid[1][1][1];
+						this.grid[1][1][1] = this.grid[4][1][1];
+						this.grid[4][1][1] = this.grid[3][1][1];
+						this.grid[3][1][1] = this.grid[2][1][1];
+						this.grid[2][1][1] = tmpC;
+						tmpC = this.grid[1][1][0];
+						this.grid[1][1][0] = this.grid[4][1][0];
+						this.grid[4][1][0] = this.grid[3][1][0];
+						this.grid[3][1][0] = this.grid[2][1][0];
+						this.grid[2][1][0] = tmpC;
+					break;
+					case "y":
+						this.rotY();
+					break;
+					case "y'":
+						this.rotYi();
+					break;
+					case "y2":
+						this.rotY2();
+					break;
+					case "z":
+						this.rotZ();
+					break;
+					case "z'":
+						this.rotZi();
+					break;
+					case "z2":
+						this.rotZ2();
+					break;
+					case "x":
+						this.rotX();
+					break;
+					case "x'":
+						this.rotXi();
+					break;
+					case "x2":
+						this.rotX2();
+					break;
+					default: Essence.say("Unknow move: "+m, "error");break;
+				}
+			}else if(this.format=="4x4x4"){
+				
+			}
+			if(isType(m, "array")){
+				for(i in m) this.moveHistory.push(m[i]);
+			}else this.moveHistory.push(m);
+			//if(this.moveHistory.length>=2) this.update();
+		}
+		this.zoom = function(n){
+			
+		}
+		this.toStr = function(toArr, layer){//either a string or a 1D array
+			if(layer || layer==0) return (toArr)? this.grid[layer].toString().split(","): this.grid[layer].toString().split(",").join(" ");
+			else return (toArr)? this.grid.toString().split(","): this.grid.toString().split(",").join(" ");
+		}
+		this.draw = function(d, place){
+			var tU = tF = tR = tB = tL = tD = "", t = "<div id='cube'>", clrP;
+			if(isNon(d)) d=2;
+			if(d==2){
+				tU = "<table cellspacing='"+this.cubieSpacing+"px'>", n=0;
+				for(j=0; j<cube.nbCubieY; j++){
+					tU += "<tr>";
+					for(k=0; k<cube.nbCubieZ; k++){
+						if(this.format=="2x2x2"){
+							if(this.grid[0].toString().split(",")[n]>=0 && this.grid[0].toString().split(",")[n]<4) clrP=0;
+							else if(this.grid[0].toString().split(",")[n]>=4 && this.grid[0].toString().split(",")[n]<8) clrP=1;
+							else if(this.grid[0].toString().split(",")[n]>=8 && this.grid[0].toString().split(",")[n]<12) clrP=2;
+							else if(this.grid[0].toString().split(",")[n]>=12 && this.grid[0].toString().split(",")[n]<16) clrP=3;
+							else if(this.grid[0].toString().split(",")[n]>=16 && this.grid[0].toString().split(",")[n]<20) clrP=4;
+							else if(this.grid[0].toString().split(",")[n]>=20 && this.grid[0].toString().split(",")[n]<24) clrP=5;
+						}else if(this.format=="3x3x3"){
+							if(this.grid[0].toString().split(",")[n]>=0 && this.grid[0].toString().split(",")[n]<9) clrP=0;
+							else if(this.grid[0].toString().split(",")[n]>=9 && this.grid[0].toString().split(",")[n]<18) clrP=1;
+							else if(this.grid[0].toString().split(",")[n]>=18 && this.grid[0].toString().split(",")[n]<27) clrP=2;
+							else if(this.grid[0].toString().split(",")[n]>=27 && this.grid[0].toString().split(",")[n]<36) clrP=3;
+							else if(this.grid[0].toString().split(",")[n]>=36 && this.grid[0].toString().split(",")[n]<45) clrP=4;
+							else if(this.grid[0].toString().split(",")[n]>=45 && this.grid[0].toString().split(",")[n]<54) clrP=5;
+						}else if(this.format=="4x4x4"){
+							if(this.grid[0].toString().split(",")[n]>=0 && this.grid[0].toString().split(",")[n]<16) clrP=0;
+							else if(this.grid[0].toString().split(",")[n]>=16 && this.grid[0].toString().split(",")[n]<33) clrP=1;
+							else if(this.grid[0].toString().split(",")[n]>=33 && this.grid[0].toString().split(",")[n]<49) clrP=2;
+							else if(this.grid[0].toString().split(",")[n]>=49 && this.grid[0].toString().split(",")[n]<63) clrP=3;
+							else if(this.grid[0].toString().split(",")[n]>=63 && this.grid[0].toString().split(",")[n]<79) clrP=4;
+							else if(this.grid[0].toString().split(",")[n]>=79 && this.grid[0].toString().split(",")[n]<95) clrP=5;
+						}
+						var cSticker = (cube.format=="3x3x3")? 4: (cube.format=="2x2x2")? 0: 5;
+						tU += (this.logo.visible && this.logo.face=="U" && this.grid[0].toString().split(",")[n]==cSticker)? "<td bgColor='"+this.colorScheme[clrP]+"' style='background: transparent url("+this.logo.source+") no-repeat;'></td>": "<td bgColor='"+this.colorScheme[clrP]+"'></td>";
+						n++;
+					}
+                    tU += "</tr>";
+				}
+				tU += "</table>"; n=0;
+				tF = "<table cellspacing='"+this.cubieSpacing+"px'>", n=0;
+				for(j=0; j<cube.nbCubieY; j++){
+					tF += "<tr>";
+					for(k=0; k<cube.nbCubieZ; k++){
+						if(this.format=="2x2x2"){
+							if(this.grid[1].toString().split(",")[n]>=0 && this.grid[1].toString().split(",")[n]<4) clrP=0;
+							else if(this.grid[1].toString().split(",")[n]>=4 && this.grid[1].toString().split(",")[n]<8) clrP=1;
+							else if(this.grid[1].toString().split(",")[n]>=8 && this.grid[1].toString().split(",")[n]<12) clrP=2;
+							else if(this.grid[1].toString().split(",")[n]>=12 && this.grid[1].toString().split(",")[n]<16) clrP=3;
+							else if(this.grid[1].toString().split(",")[n]>=16 && this.grid[1].toString().split(",")[n]<20) clrP=4;
+							else if(this.grid[1].toString().split(",")[n]>=20 && this.grid[1].toString().split(",")[n]<24) clrP=5;
+						}else if(this.format=="3x3x3"){
+							if(this.grid[1].toString().split(",")[n]>=0 && this.grid[1].toString().split(",")[n]<9) clrP=0;
+							else if(this.grid[1].toString().split(",")[n]>=9 && this.grid[1].toString().split(",")[n]<18) clrP=1;
+							else if(this.grid[1].toString().split(",")[n]>=18 && this.grid[1].toString().split(",")[n]<27) clrP=2;
+							else if(this.grid[1].toString().split(",")[n]>=27 && this.grid[1].toString().split(",")[n]<36) clrP=3;
+							else if(this.grid[1].toString().split(",")[n]>=36 && this.grid[1].toString().split(",")[n]<45) clrP=4;
+							else if(this.grid[1].toString().split(",")[n]>=45 && this.grid[1].toString().split(",")[n]<54) clrP=5;
+						}else if(this.format=="4x4x4"){
+							if(this.grid[1].toString().split(",")[n]>=0 && this.grid[1].toString().split(",")[n]<16) clrP=0;
+							else if(this.grid[1].toString().split(",")[n]>=16 && this.grid[1].toString().split(",")[n]<33) clrP=1;
+							else if(this.grid[1].toString().split(",")[n]>=33 && this.grid[1].toString().split(",")[n]<49) clrP=2;
+							else if(this.grid[1].toString().split(",")[n]>=49 && this.grid[1].toString().split(",")[n]<63) clrP=3;
+							else if(this.grid[1].toString().split(",")[n]>=63 && this.grid[1].toString().split(",")[n]<79) clrP=4;
+							else if(this.grid[1].toString().split(",")[n]>=79 && this.grid[1].toString().split(",")[n]<95) clrP=5;
+						}
+						var cSticker = (cube.format=="3x3x3")? 13: (cube.format=="2x2x2")? 4: 22;
+						tF += (this.logo.visible && this.logo.face=="F" && this.grid[1].toString().split(",")[n]==cSticker)? "<td bgColor='"+this.colorScheme[clrP]+"' style='background: transparent url("+this.logo.source+") no-repeat;'></td>": "<td bgColor='"+this.colorScheme[clrP]+"'></td>";
+						n++;
+					}
+					tF += "</tr>";
+				}
+				tF +="</table>"; n=0;
+				tR = "<table cellspacing='"+this.cubieSpacing+"px'>", n=0;
+				for(j=0; j<cube.nbCubieY; j++){
+					tR += "<tr>";
+					for(k=0; k<cube.nbCubieZ; k++){
+						if(this.format=="2x2x2"){
+							if(this.grid[2].toString().split(",")[n]>=0 && this.grid[2].toString().split(",")[n]<4) clrP=0;
+							else if(this.grid[2].toString().split(",")[n]>=4 && this.grid[2].toString().split(",")[n]<8) clrP=1;
+							else if(this.grid[2].toString().split(",")[n]>=8 && this.grid[2].toString().split(",")[n]<12) clrP=2;
+							else if(this.grid[2].toString().split(",")[n]>=12 && this.grid[2].toString().split(",")[n]<16) clrP=3;
+							else if(this.grid[2].toString().split(",")[n]>=16 && this.grid[2].toString().split(",")[n]<20) clrP=4;
+							else if(this.grid[2].toString().split(",")[n]>=20 && this.grid[2].toString().split(",")[n]<24) clrP=5;
+						}else if(this.format=="3x3x3"){
+							if(this.grid[2].toString().split(",")[n]>=0 && this.grid[2].toString().split(",")[n]<9) clrP=0;
+							else if(this.grid[2].toString().split(",")[n]>=9 && this.grid[2].toString().split(",")[n]<18) clrP=1;
+							else if(this.grid[2].toString().split(",")[n]>=18 && this.grid[2].toString().split(",")[n]<27) clrP=2;
+							else if(this.grid[2].toString().split(",")[n]>=27 && this.grid[2].toString().split(",")[n]<36) clrP=3;
+							else if(this.grid[2].toString().split(",")[n]>=36 && this.grid[2].toString().split(",")[n]<45) clrP=4;
+							else if(this.grid[2].toString().split(",")[n]>=45 && this.grid[2].toString().split(",")[n]<54) clrP=5;
+						}else if(this.format=="4x4x4"){
+							if(this.grid[2].toString().split(",")[n]>=0 && this.grid[2].toString().split(",")[n]<16) clrP=0;
+							else if(this.grid[2].toString().split(",")[n]>=16 && this.grid[2].toString().split(",")[n]<33) clrP=1;
+							else if(this.grid[2].toString().split(",")[n]>=33 && this.grid[2].toString().split(",")[n]<49) clrP=2;
+							else if(this.grid[2].toString().split(",")[n]>=49 && this.grid[2].toString().split(",")[n]<63) clrP=3;
+							else if(this.grid[2].toString().split(",")[n]>=63 && this.grid[2].toString().split(",")[n]<79) clrP=4;
+							else if(this.grid[2].toString().split(",")[n]>=79 && this.grid[2].toString().split(",")[n]<95) clrP=5;
+						}
+						var cSticker = (cube.format=="3x3x3")? 22: (cube.format=="2x2x2")? 11: 54;
+						tR += (this.logo.visible && this.logo.face=="R" && this.grid[2].toString().split(",")[n]==cSticker)? "<td bgColor='"+this.colorScheme[clrP]+"' style='background: transparent url("+this.logo.source+") no-repeat;'></td>": "<td bgColor='"+this.colorScheme[clrP]+"'></td>";
+						n++;
+					}
+                    tR += "</tr>";
+				}
+				tR +="</table>"; n=0;
+				tB = "<table cellspacing='"+this.cubieSpacing+"px'>", n=0;
+				for(j=0; j<cube.nbCubieY; j++){
+					tB += "<tr>";
+					for(k=0; k<cube.nbCubieZ; k++){
+						if(this.format=="2x2x2"){
+							if(this.grid[3].toString().split(",")[n]>=0 && this.grid[3].toString().split(",")[n]<4) clrP=0;
+							else if(this.grid[3].toString().split(",")[n]>=4 && this.grid[3].toString().split(",")[n]<8) clrP=1;
+							else if(this.grid[3].toString().split(",")[n]>=8 && this.grid[3].toString().split(",")[n]<12) clrP=2;
+							else if(this.grid[3].toString().split(",")[n]>=12 && this.grid[3].toString().split(",")[n]<16) clrP=3;
+							else if(this.grid[3].toString().split(",")[n]>=16 && this.grid[3].toString().split(",")[n]<20) clrP=4;
+							else if(this.grid[3].toString().split(",")[n]>=20 && this.grid[3].toString().split(",")[n]<24) clrP=5;
+						}else if(this.format=="3x3x3"){
+							if(this.grid[3].toString().split(",")[n]>=0 && this.grid[3].toString().split(",")[n]<9) clrP=0;
+							else if(this.grid[3].toString().split(",")[n]>=9 && this.grid[3].toString().split(",")[n]<18) clrP=1;
+							else if(this.grid[3].toString().split(",")[n]>=18 && this.grid[3].toString().split(",")[n]<27) clrP=2;
+							else if(this.grid[3].toString().split(",")[n]>=27 && this.grid[3].toString().split(",")[n]<36) clrP=3;
+							else if(this.grid[3].toString().split(",")[n]>=36 && this.grid[3].toString().split(",")[n]<45) clrP=4;
+							else if(this.grid[3].toString().split(",")[n]>=45 && this.grid[3].toString().split(",")[n]<54) clrP=5;
+						}else if(this.format=="4x4x4"){
+							if(this.grid[3].toString().split(",")[n]>=0 && this.grid[3].toString().split(",")[n]<16) clrP=0;
+							else if(this.grid[3].toString().split(",")[n]>=16 && this.grid[3].toString().split(",")[n]<33) clrP=1;
+							else if(this.grid[3].toString().split(",")[n]>=33 && this.grid[3].toString().split(",")[n]<49) clrP=2;
+							else if(this.grid[3].toString().split(",")[n]>=49 && this.grid[3].toString().split(",")[n]<63) clrP=3;
+							else if(this.grid[3].toString().split(",")[n]>=63 && this.grid[3].toString().split(",")[n]<79) clrP=4;
+							else if(this.grid[3].toString().split(",")[n]>=79 && this.grid[3].toString().split(",")[n]<95) clrP=5;
+						}
+						var cSticker = (cube.format=="3x3x3")? 31: (cube.format=="2x2x2")? 12: 53;
+						tB += (this.logo.visible && this.logo.face=="B" && this.grid[4].toString().split(",")[n]==cSticker)? "<td bgColor='"+this.colorScheme[clrP]+"' style='background: transparent url("+this.logo.source+") no-repeat;'></td>": "<td bgColor='"+this.colorScheme[clrP]+"'></td>";
+						n++;
+					}
+					tB += "</tr>";
+				}
+				tB +="</table>"; n=0;
+				tL = "<table cellspacing='"+this.cubieSpacing+"px'>", n=0;
+				for(j=0; j<cube.nbCubieY; j++){
+					tL += "<tr>";
+					for(k=0; k<cube.nbCubieZ; k++){
+						if(this.format=="2x2x2"){
+							if(this.grid[4].toString().split(",")[n]>=0 && this.grid[4].toString().split(",")[n]<4) clrP=0;
+							else if(this.grid[4].toString().split(",")[n]>=4 && this.grid[4].toString().split(",")[n]<8) clrP=1;
+							else if(this.grid[4].toString().split(",")[n]>=8 && this.grid[4].toString().split(",")[n]<12) clrP=2;
+							else if(this.grid[4].toString().split(",")[n]>=12 && this.grid[4].toString().split(",")[n]<16) clrP=3;
+							else if(this.grid[4].toString().split(",")[n]>=16 && this.grid[4].toString().split(",")[n]<20) clrP=4;
+							else if(this.grid[4].toString().split(",")[n]>=20 && this.grid[4].toString().split(",")[n]<24) clrP=5;
+						}else if(this.format=="3x3x3"){
+							if(this.grid[4].toString().split(",")[n]>=0 && this.grid[4].toString().split(",")[n]<9) clrP=0;
+							else if(this.grid[4].toString().split(",")[n]>=9 && this.grid[4].toString().split(",")[n]<18) clrP=1;
+							else if(this.grid[4].toString().split(",")[n]>=18 && this.grid[4].toString().split(",")[n]<27) clrP=2;
+							else if(this.grid[4].toString().split(",")[n]>=27 && this.grid[4].toString().split(",")[n]<36) clrP=3;
+							else if(this.grid[4].toString().split(",")[n]>=36 && this.grid[4].toString().split(",")[n]<45) clrP=4;
+							else if(this.grid[4].toString().split(",")[n]>=45 && this.grid[4].toString().split(",")[n]<54) clrP=5;
+						}else if(this.format=="4x4x4"){
+							if(this.grid[4].toString().split(",")[n]>=0 && this.grid[4].toString().split(",")[n]<16) clrP=0;
+							else if(this.grid[4].toString().split(",")[n]>=16 && this.grid[4].toString().split(",")[n]<33) clrP=1;
+							else if(this.grid[4].toString().split(",")[n]>=33 && this.grid[4].toString().split(",")[n]<49) clrP=2;
+							else if(this.grid[4].toString().split(",")[n]>=49 && this.grid[4].toString().split(",")[n]<63) clrP=3;
+							else if(this.grid[4].toString().split(",")[n]>=63 && this.grid[4].toString().split(",")[n]<79) clrP=4;
+							else if(this.grid[4].toString().split(",")[n]>=79 && this.grid[4].toString().split(",")[n]<95) clrP=5;
+						}
+						var cSticker = (cube.format=="3x3x3")? 40: (cube.format=="2x2x2")? 16: 69;
+						tL += (this.logo.visible && this.logo.face=="L" && this.grid[4].toString().split(",")[n]==cSticker)? "<td bgColor='"+this.colorScheme[clrP]+"' style='background: transparent url("+this.logo.source+") no-repeat;'></td>": "<td bgColor='"+this.colorScheme[clrP]+"'></td>";
+						n++;
+					}
+					tL += "</tr>";
+				}
+				tL +="</table>"; n=0;
+				tD = "<table cellspacing='"+this.cubieSpacing+"px'>", n=0;
+				for(j=0; j<cube.nbCubieY; j++){
+					tD += "<tr>";
+					for(k=0; k<cube.nbCubieZ; k++){
+						if(this.format=="2x2x2"){
+							if(this.grid[5].toString().split(",")[n]>=0 && this.grid[5].toString().split(",")[n]<4) clrP=0;
+							else if(this.grid[5].toString().split(",")[n]>=4 && this.grid[5].toString().split(",")[n]<8) clrP=1;
+							else if(this.grid[5].toString().split(",")[n]>=8 && this.grid[5].toString().split(",")[n]<12) clrP=2;
+							else if(this.grid[5].toString().split(",")[n]>=12 && this.grid[5].toString().split(",")[n]<16) clrP=3;
+							else if(this.grid[5].toString().split(",")[n]>=16 && this.grid[5].toString().split(",")[n]<20) clrP=4;
+							else if(this.grid[5].toString().split(",")[n]>=20 && this.grid[5].toString().split(",")[n]<24) clrP=5;
+						}else if(this.format=="3x3x3"){
+							if(this.grid[5].toString().split(",")[n]>=0 && this.grid[5].toString().split(",")[n]<9) clrP=0;
+							else if(this.grid[5].toString().split(",")[n]>=9 && this.grid[5].toString().split(",")[n]<18) clrP=1;
+							else if(this.grid[5].toString().split(",")[n]>=18 && this.grid[5].toString().split(",")[n]<27) clrP=2;
+							else if(this.grid[5].toString().split(",")[n]>=27 && this.grid[5].toString().split(",")[n]<36) clrP=3;
+							else if(this.grid[5].toString().split(",")[n]>=36 && this.grid[5].toString().split(",")[n]<45) clrP=4;
+							else if(this.grid[5].toString().split(",")[n]>=45 && this.grid[5].toString().split(",")[n]<54) clrP=5;
+						}else if(this.format=="4x4x4"){
+							if(this.grid[5].toString().split(",")[n]>=0 && this.grid[5].toString().split(",")[n]<16) clrP=0;
+							else if(this.grid[5].toString().split(",")[n]>=16 && this.grid[5].toString().split(",")[n]<33) clrP=1;
+							else if(this.grid[5].toString().split(",")[n]>=33 && this.grid[5].toString().split(",")[n]<49) clrP=2;
+							else if(this.grid[5].toString().split(",")[n]>=49 && this.grid[5].toString().split(",")[n]<63) clrP=3;
+							else if(this.grid[5].toString().split(",")[n]>=63 && this.grid[5].toString().split(",")[n]<79) clrP=4;
+							else if(n>=79 && n<95) clrP=5;
+						}
+						var cSticker = (cube.format=="3x3x3")? 49: (cube.format=="2x2x2")? 23: 90;
+						tD += (this.logo.visible && this.logo.face=="D" && this.grid[5].toString().split(",")[n]==cSticker)? "<td bgColor='"+this.colorScheme[clrP]+"' style='background: transparent url("+this.logo.source+") no-repeat;'></td>": "<td bgColor='"+this.colorScheme[clrP]+"'></td>";
+						n++;
+					}
+					tD += "</tr>";
+				}
+				tD +="</table>"; n=0;
+			}else if(d==3){
+				//using: document.write("<div id='facelet' style='width:100px;height:100px;translate:translate3d(0px, -100px, 0px) rotateX(90deg);box-sizing: border-box; background: #0f0; border: 1px solid #000;transform-origin: 50% 100%;'></div>")
+			}else console.log("Unsupplied dimension for drawing this cube.");//maybe having all the cubies in a line for d=1
+			var dep = (this.width+10*this.nbCubieX-this.nbCubieX*this.cubieBorderSize);
+			if(this.format=="3x3x3") dep -= 8*this.cubieBorderSize;
+			else if(this.format=="4x4x4") dep -= 16*this.cubieBorderSize;
+			var lgSz = this.cubieSize[0]/this.nbCubieX;
+			t += "<section style='margin-left:"+dep+";'>"+tU+"</section><table><tr><td style='border:0;'>"+tL+"</td><td style='border:0;'>"+tF+"</td><td style='border:0;'>"+tR+"</td><td style='border:0;'>"+tB+"</td></tr></table><section style='margin-left:"+dep+";'>"+tD+"</section></div><style>#cube {margin-left:"+this.x+"px;margin-right:"+this.y+"px;}table{width:"+this.width+";height:"+this.height+";font-family:Calibrie,Verdana,Arial;margin:"+this.cubieSpacing+"px;}td{border: "+this.cubieBorderSize+"px solid "+this.cubieBorderColor+";border-radius:'"+this.florian+"';-webkit-border-radius:'"+this.florian+"';-moz-border-radius:'"+this.florian+"';padding:5px;}#logo{width:"+lgSz+"px;height:"+lgSz+"px;padding:0;margin:0;}</style>";
+			if(place) $e(place).write(t, true);
+			else $e("html").write(t, true);
+			this.florianMod(3);
+		}
+		this.update = function(d, lvl){
+			this.format = this.nbCubieX+"x"+this.nbCubieY+"x"+this.nbCubieZ;
+			for(i=0; i<this.moveHistory.length-1; i++){
+				if(isInverseOf(this.moveHistory[i], this.moveHistory[i+1])) this.moveHistory[i] = undefined;
+				else if(this.moveHistory[i]==this.moveHistory[i+1]){
+					this.moveHistory[i+1] = undefined;
+					if(this.moveHistory[i].indexOf("w")>0) this.moveHistory[i] = this.moveHistory[i].slice(0, 2)+"2";
+					else this.moveHistory[i] = this.moveHistory[i][0]+"2";
+				}
+			}
+			this.florianMod(lvl||3);
+			this.draw(d||2);
+		}
+		this.isOriented = function(sticker){
+			
+		}
+		this.flipCentre = function(centres, theta){//theta is ignored when centres is an array that contains each individual thetas
+			if(deg%90!=0) return "The absolute degree of rotation must be either 90° or 180°";
+			var alg = "";
+			if(isType(centres, "String")){//one centre orientation
+				if(centres=="R") alg = "z'";
+				else if(centres=="L") alg = "z";
+				else if(centres=="F") alg = "x";
+				else if(centres=="B") alg = "x'";
+				else if(centres=="D") alg = "x2";
+				if(theta==90) alg += "M E' M' U' M E M' U";
+				else if(theta==-90) alg += "M E' M' U M E M' U'";
+				else if(Math.abs(theta)==180) alg += "M E' M' U2 M E M' U2";
+				if(centres=="R") alg = "z";
+				else if(centres=="L") alg = "z'";
+				else if(centres=="F") alg = "x'";
+				else if(centres=="B") alg = "x";
+				else if(centres=="D") alg = "x2";
+			}else{
+				if(centres.indexOf("U")>-1 && centres.indexOf("D")>-1){
+					var top="", bottom="";
+					if(centres.charAt(centres.indexOf("U")+1)=="" || centres.charAt(centres.indexOf("U")+1)=="+") top = "U'";
+					else if(centres.charAt(centres.indexOf("U")+1)=="2" || centres.charAt(centres.indexOf("U")+1)=="*") top = "U2";
+					else top = "U";
+					if(centres.charAt(centres.indexOf("U")+1)=="" || centres.charAt(centres.indexOf("U")+1)=="+") bottom = "D'";
+					else if(centres.charAt(centres.indexOf("D")+1)=="2" || centres.charAt(centres.indexOf("D")+1)=="*") top = "D2";
+					else bottom = "D";
+					alg = "M E' M' "+top+" "+bottom+" M E M' "+undoMove(top)+" "+undoMove(bottom);
+				}else if(centres.indexOf("R")>-1 && centres.indexOf("L")>-1){
+					var top="", bottom="";
+					if(centres.charAt(centres.indexOf("R")+1)=="" || centres.charAt(centres.indexOf("R")+1)=="+") top = "R'";
+					else if(centres.charAt(centres.indexOf("R")+1)=="2" || centres.charAt(centres.indexOf("R")+1)=="*") top = "R2";
+					else top = "R";
+					if(centres.charAt(centres.indexOf("R")+1)=="" || centres.charAt(centres.indexOf("R")+1)=="+") bottom = "L'";
+					else if(centres.charAt(centres.indexOf("L")+1)=="2" || centres.charAt(centres.indexOf("L")+1)=="*") top = "L2";
+					else bottom = "L";
+					alg += "E' M' E "+top+" "+bottom+" E' M E "+undoMove(top)+" "+undoMove(bottom);
+				}else if(centres.indexOf("F")>-1 && centres.indexOf("B")>-1){
+					var top="", bottom="";
+					if(centres.charAt(centres.indexOf("F")+1)=="" || centres.charAt(centres.indexOf("F")+1)=="+") top = "F'";
+					else if(centres.charAt(centres.indexOf("F")+1)=="2" || centres.charAt(centres.indexOf("F")+1)=="*") top = "F2";
+					else top = "F";
+					if(centres.charAt(centres.indexOf("F")+1)=="" || centres.charAt(centres.indexOf("F")+1)=="+") bottom = "B'";
+					else if(centres.charAt(centres.indexOf("B")+1)=="2" || centres.charAt(centres.indexOf("B")+1)=="*") top = "B2";
+					else bottom = "B";
+					alg += "M' S M "+top+" "+bottom+" M' S' M "+undoMove(top)+" "+undoMove(bottom);
+				}
+			}
+			this.perform(alg);
+		}
+		this.florianMod = function(lvl, o, i){//o and i MUST be in pixels
+			if(isNaN(lvl)) return false;
+			var outter=o||8, inner = i||12.5;//lvl 1
+			if(lvl==0) outter = 1, inner = 1, Essence.say("Don't you like speedcubes ?\nYou are probably still an cuber or just an old person.");
+			else if(lvl==2) outter = 7.2, inner = 10;
+			else if(lvl==3) outter = 7.5, inner = 13, Essence.say("Hello speedcuber !", "info");
+			else if(lvl==1) outter = 6, inner = 7;
+			else if(lvl==4) outter = 9, inner = 16;
+			else if(lvl==5) outter = 11, inner = 32, Essence.say("Wow ! You must like corner twists and perhaps pops !");
+			if(inner>=16 && inner<=32) Essence.say("A Gans lover has been detected !", "info");
+			if(inner>32 || outter>24) Essence.say("Wow ! That's a curvy cube you got there.", "info");
+			if(this.format=="2x2x2"){
+				for(i=0; i<$n("*td").length; i++){
+					if((i!=25 && i%5==0) || i==24){//bottom right
+						$n("*td")[i].style.borderRadius = outter+"px "+outter+"px "+inner+"px "+outter+"px";
+						$n("*td")[i].style.webkitBorderRadius = outter+"px "+outter+"px "+inner+"px "+outter+"px";
+						$n("*td")[i].style.mozBorderRadius = outter+"px "+outter+"px "+inner+"px "+outter+"px";
+					}else if(i==1 || ((i-5)%5==0 && i%5!=0)|| i==25){//bottom left
+						$n("*td")[i].style.borderRadius = outter+"px "+outter+"px "+outter+"px "+inner+"px";
+						$n("*td")[i].style.webkitBorderRadius = outter+"px "+outter+"px "+outter+"px "+inner+"px";
+						$n("*td")[i].style.mozBorderRadius = outter+"px "+outter+"px "+outter+"px "+inner+"px";
+					}else if(i==2 || (i-5)%5==2 || i==26){//top right
+						$n("*td")[i].style.borderRadius = outter+"px "+inner+"px "+outter+"px "+outter+"px";
+						$n("*td")[i].style.webkitBorderRadius = outter+"px "+inner+"px "+outter+"px "+outter+"px";
+						$n("*td")[i].style.mozBorderRadius = outter+"px "+inner+"px "+outter+"px "+outter+"px";
+					}else if(i==3 || (i-5)%5==3 || i==27){//top left
+						$n("*td")[i].style.borderRadius = inner+"px "+outter+"px "+outter+"px "+outter+"px";
+						$n("*td")[i].style.webkitBorderRadius = inner+"px "+outter+"px "+outter+"px "+outter+"px";
+						$n("*td")[i].style.mozBorderRadius = inner+"px "+outter+"px "+outter+"px "+outter+"px";
+					}
+				}
+			}else if(this.format=="3x3x3"){
+				for(i=0; i<$n("*td").length; i++){
+					if((i%10==0 && i!=50) || i==49){//bottom right
+						$n("*td")[i].style.borderRadius = outter+"px "+outter+"px "+inner+"px "+outter+"px";
+						$n("*td")[i].style.webkitBorderRadius = outter+"px "+outter+"px "+inner+"px "+outter+"px";
+						$n("*td")[i].style.mozBorderRadius = outter+"px "+outter+"px "+inner+"px "+outter+"px";
+					}else if(((i-2)%10==0 && i!=52) || i==51){//bottom left
+						$n("*td")[i].style.borderRadius = outter+"px "+outter+"px "+outter+"px "+inner+"px";
+						$n("*td")[i].style.webkitBorderRadius = outter+"px "+outter+"px "+outter+"px "+inner+"px";
+						$n("*td")[i].style.mozBorderRadius = outter+"px "+outter+"px "+outter+"px "+inner+"px";
+					}else if(((i-6)%10==0 && i!=56) || i==55){//top right
+						$n("*td")[i].style.borderRadius = outter+"px "+inner+"px "+outter+"px "+outter+"px";
+						$n("*td")[i].style.webkitBorderRadius = outter+"px "+inner+"px "+outter+"px "+outter+"px";
+						$n("*td")[i].style.mozBorderRadius = outter+"px "+inner+"px "+outter+"px "+outter+"px";
+					}else if(((i-8)%10==0 && i!=58) || i==57){//top left
+						$n("*td")[i].style.borderRadius = inner+"px "+outter+"px "+outter+"px "+outter+"px";
+						$n("*td")[i].style.webkitBorderRadius = inner+"px "+outter+"px "+outter+"px "+outter+"px";
+						$n("*td")[i].style.mozBorderRadius = inner+"px "+outter+"px "+outter+"px "+outter+"px";
+					}else if(((i-1)%10==0 && i!=51) || i==50){//bottom
+						$n("*td")[i].style.borderRadius = outter+"px "+outter+"px "+inner+"px "+inner+"px";
+						$n("*td")[i].style.webkitBorderRadius = outter+"px "+outter+"px "+inner+"px "+inner+"px";
+						$n("*td")[i].style.mozBorderRadius = outter+"px "+outter+"px "+inner+"px "+inner+"px";
+					}else if(((i-3)%10==0 && i!=53) || i==52){//right
+						$n("*td")[i].style.borderRadius = outter+"px "+inner+"px "+inner+"px "+outter+"px";
+						$n("*td")[i].style.webkitBorderRadius = outter+"px "+inner+"px "+inner+"px "+outter+"px";
+						$n("*td")[i].style.mozBorderRadius = outter+"px "+inner+"px "+inner+"px "+outter+"px";
+					}else if(((i-5)%10==0 && i!=55) || i==54){//left
+						$n("*td")[i].style.borderRadius = inner+"px "+outter+"px "+outter+"px "+inner+"px";
+						$n("*td")[i].style.webkitBorderRadius = inner+"px "+outter+"px "+outter+"px "+inner+"px";
+						$n("*td")[i].style.mozBorderRadius = inner+"px "+outter+"px "+outter+"px "+inner+"px";
+					}else if(((i-7)%10==0 && i!=57) || i==56){//up
+						$n("*td")[i].style.borderRadius = inner+"px "+inner+"px "+outter+"px "+outter+"px";
+						$n("*td")[i].style.webkitBorderRadius = inner+"px "+inner+"px "+outter+"px "+outter+"px";
+						$n("*td")[i].style.mozBorderRadius = inner+"px "+inner+"px "+outter+"px "+outter+"px";
+					}else if(((i-4)%10==0 && i!=57) || i==53){//all (centres)
+						$n("*td")[i].style.borderRadius = inner+"px "+inner+"px "+inner+"px "+inner+"px";
+						$n("*td")[i].style.webkitBorderRadius = inner+"px "+inner+"px "+inner+"px "+inner+"px";
+						$n("*td")[i].style.mozBorderRadius = inner+"px "+inner+"px "+inner+"px "+inner+"px";
+					}
+				}
+			}else if(this.format=="4x4x4"){
+			
+			}
+		}
+		this.getState = function(form){
+			if(isNon(form) || form=="scramble") return this.moveHistory.join(" ");
+			else if(form=="grid" || form=="matrix") return this.toStr();
+			else if(form=="cubies" || form=="singmaster"){
+				var f="", ar=this.toStr().split(" ");
+				for(i=0; i<ar.length; i++){
+					
+				}
+			}
+		}
+		this.lookfor = function(n){//search and return the grid's position of a cubie with the number n
+			for(i=0; i<6; i++){
+				for(j=0; j<this.nbCubieY; j++){
+					for(k=0; k<this.nbCubieZ; k++){
+						if(this.grid[i][j][k]==n) return [i, j, k];
+					}
+				}
+			}
+			Essence.say("The cubie wasn't found.", "error");
+		}
+		this.getCubieAt = function(l, y, x){//pos is the grid's 3D position: [l][y][x]
+			return this.grid[l][y][x].toString().split(",").join(" ");
+		}
+		this.getUnsolvedStickers = function(nOrCoord){
+			var uc = [], n=0;
+			for(i=0; i<6; i++){
+				for(j=0; j<this.nbCubieY; j++){
+					for(k=0; k<this.nbCubieZ; k++){
+						if(this.grid[i][j][k]!=n){
+							if(rmChar(nOrCoord.toLowerCase(), " ")[0]=="n") uc.push(n);
+							else uc.push([i, j, k]);
+						}
+						n++;
+					}
+				}
+			}
+			return uc;
+		}
+		
+	}
+	function genTargets(buffer, len){
+	  var targets=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x"], res= new Array(len);
+	  for(i=0; i<=len; i++){
+		var t=targets[randTo(targets.length-1)];
+		if((i>0 && t==res[i-1]) || t==buffer) t=targets[randTo(targets.length-1)];
+		res[i] = t;
+	  }
+	  return res.join(" ");
+	}
+	/*
+	$n("#test").innerHTML = "<b>3x3:</b><br />Corners: "+genTargets("a", rand(4, 8, true))+"<br />Edges: "+genTargets("u", rand(6, 12, true))+"<br /><b>4x4:</b><br />Corners: "+genTargets("a", rand(4, 8, true))+"<br />Edges: "+genTargets("u", rand(6, 12, true))+"<br />Centres: "+genTargets("b", rand(12, 24, true))+"<br /><b>5x5:</b><br />Corners: "+genTargets("a", rand(4, 8, true))+"<br />Midges: "+genTargets("u", rand(6, 12, true))+"<br />X-Edges: "+genTargets("u", rand(6, 12, true))+"<br />T-Centres: "+genTargets("b", rand(12, 24, true))+"<br />X-Centres: "+genTargets("b", rand(12, 24, true))
+	*/
+	function randSte(sz, n){
+		
+	}
+	
+	function undoMove(x){
+		if(isType(x, "String") && x.indexOf(" ")>0) x = x.split(" ");
+		if(isNon(x)) return false;
+		var u=[];
+		for(i=0; i<x.length; i++){
+			if(x[i].indexOf("w")>0) u[x.length-i-1] = (x[i][2]=="'")? x.slice(0, 2): x[i]+"'";
+			else if(x[i][1]=="2") u[x.length-i-1] = x[i];
+			else u[x.length-i-1] = (x[i][1]=="'")? x[i][0]: x[i]+"'";
+		}
+		return u.join(" ");
+	}
+	
+	function isInverseOf(a, b){//if a is the inverse of b, aka: a = b' or a' = b
+		if(a[0]!=b[0]) return false;//if a and b are moves of different layers (e.g: a=R and b=U)
+		else if(a.length>=2 && b.length>=2 && a[1]=="w" && a.slice(0, 2)==b.slice(0, 2)){//e.g: a=Rw and b=Rw(/'/2)
+			if(a==b && a.indexOf(2)>0) return true;//e.g: a=Rw2 and b=Rw2
+			else if(xor(a.indexOf("'")>0, b.indexOf("'")>0) && a.indexOf(2)==-1 && b.indexOf(2)==-1) return true;//e.g: a=Rw and b=Rw'
+			else return false;
+		}else if(a==b && a.indexOf(2)>0) return true;//e.g: a=R2 and b=R2
+		else if(a[0]==b[0] && xor(a.indexOf("'")>0, b.indexOf("'")>0) && a.indexOf(2)==-1 && b.indexOf(2)==-1) return true;//e.g: a=R and b=R'
+		else return false;
+	}
+	
+	function mirror(x, axis){
+		if(isType(x, "String") && x.indexOf(" ")>0) x = x.split(" ");
+		if(isNon(x)) return false;
+		var m=[];
+		if(mirror[0].toLowerCase()=="m"){
+			for(i=0; i<x.length; i++){
+				
+			}
+		}else if(mirror[0].toLowerCase()=="s"){
+		
+		}else{//e
+		
+		}
+	}
+	
+	window.onload = function(){
+		cube.reset();
+		cube.draw();
+	}
+	var cube = new RubikCube(100, 100, 0, 220, 220, 220, 3, 3, 3), minicube = new RubikCube(100, 100, 0, 210, 210, 210, 2, 2, 2);
+	function transformCube(sz){
+		cube.nbCubieX=cube.nbCubieY=cube.nbCubieZ=sz||2;cube.reset();cube.draw();
+	}
+	
+	function keyControl(keyStroke){
+		var pair = getKey(keyStroke);
+		Essence.say("Move: "+pair[0]);
+		cube.move(pair[0]);
+		cube.draw();
+	}
+	
+	document.onkeypress = keyControl;
+	</script>
+</head>
+<body>
+
+</body>
+</html>
